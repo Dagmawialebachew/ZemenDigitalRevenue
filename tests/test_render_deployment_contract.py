@@ -53,6 +53,9 @@ def test_production_startup_honors_render_port() -> None:
 
     assert 'APP_PORT="${PORT:-${APP_PORT:-8000}}"' in startup
     assert "export APP_PORT" in startup
+    assert 'PROJECT_ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"' in startup
+    assert 'PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"' in startup
+    assert "export PYTHONPATH" in startup
     assert "python scripts/migrate.py" in startup
     assert "python scripts/preflight.py" in startup
     assert "exec python main.py" in startup
