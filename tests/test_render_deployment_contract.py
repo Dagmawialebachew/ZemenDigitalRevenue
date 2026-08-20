@@ -11,6 +11,7 @@ def test_render_blueprint_uses_free_backend_service_and_safe_health_check() -> N
     assert "plan: free" in blueprint
     assert "dockerfilePath: ./Dockerfile.render" in blueprint
     assert "healthCheckPath: /health/live" in blueprint
+    assert "maxShutdownDelaySeconds" not in blueprint
     assert 'key: STATIC_APPS_ENABLED\n        value: "false"' in blueprint
 
 
