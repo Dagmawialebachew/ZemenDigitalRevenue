@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: zemen
+      POSTGRES_PASSWORD: zemen_local_only
+      POSTGRES_DB: zemen
+    ports:
+       - "55432:5432"
+    volumes:
+      - zemen_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zemen -d zemen"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  zemen_pg:

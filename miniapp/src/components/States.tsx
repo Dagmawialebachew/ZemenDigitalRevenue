@@ -1,0 +1,2 @@
+export function LoadingState({ label }: { label: string }) { return <div className="state-page"><div className="z-loader"><i/><i/><i/></div><p>{label}</p></div> }
+export function ErrorState({ message, retry, retryLabel }: { message: string; retry: () => void; retryLabel: string }) { return <div className="state-page"><div className="state-mark">!</div><h2>{message}</h2><button className="primary-button" onClick={retry}>{retryLabel}</button></div> }

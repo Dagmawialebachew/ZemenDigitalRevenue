@@ -1,0 +1,38 @@
+# Backend-only production image for Render.
+# The Mini App and Control frontend are deployed independently on Vercel.
+FROM python:3.13-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    APP_HOST=0.0.0.0 \
+    STATIC_APPS_ENABLED=false
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl postgresql-client ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY backend ./backend
+COPY bot ./bot
+COPY database ./database
+COPY shared ./shared
+COPY workers ./workers
+COPY scripts ./scripts
+COPY main.py ./
+
+RUN chmod +x scripts/start-production.sh \
+    && useradd --create-home --uid 10001 zemen \
+    && chown -R zemen:zemen /app
+
+USER zemen
+
+EXPOSE 10000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -fsS "http://127.0.0.1:${PORT:-${APP_PORT:-10000}}/health/live" || exit 1
+
+CMD ["sh", "scripts/start-production.sh"]

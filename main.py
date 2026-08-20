@@ -1,0 +1,19 @@
+from __future__ import annotations
+
+import uvicorn
+
+from backend.core.config import get_settings
+
+
+def main() -> None:
+    settings = get_settings()
+    uvicorn.run(
+        "backend.app:app",
+        host=settings.app_host,
+        port=settings.app_port,
+        reload=settings.app_env.value == "development",
+    )
+
+
+if __name__ == "__main__":
+    main()

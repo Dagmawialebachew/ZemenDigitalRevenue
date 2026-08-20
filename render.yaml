@@ -1,0 +1,103 @@
+services:
+  - type: web
+    name: zemen-digital-api
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile.render
+    dockerContext: .
+    healthCheckPath: /health/live
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_HOST
+        value: 0.0.0.0
+      - key: LOG_LEVEL
+        value: INFO
+      - key: STATIC_APPS_ENABLED
+        value: "false"
+      - key: RUN_MIGRATIONS
+        value: "true"
+      - key: RUN_PREFLIGHT
+        value: "true"
+
+      # Neon Free: allow idle connections and polling to stop long enough for
+      # compute to scale to zero. Request-driven jobs wake workers immediately.
+      - key: DB_MIN_POOL_SIZE
+        value: "0"
+      - key: DB_MAX_POOL_SIZE
+        value: "3"
+      - key: DB_MAX_INACTIVE_CONNECTION_LIFETIME_SECONDS
+        value: "60"
+      - key: WORKERS_ENABLED
+        value: "true"
+      - key: WORKER_CONCURRENCY
+        value: "1"
+      - key: WORKER_LISTEN_NOTIFY_ENABLED
+        value: "false"
+      - key: WORKER_POLL_FALLBACK_SECONDS
+        value: "900"
+      - key: WORKER_RECOVERY_INTERVAL_SECONDS
+        value: "900"
+      - key: WORKER_LEASE_SECONDS
+        value: "180"
+      - key: WORKER_SHUTDOWN_GRACE_SECONDS
+        value: "20"
+
+      - key: BOT_MODE
+        value: webhook
+      - key: TELEGRAM_WEBHOOK_PATH
+        value: /telegram/webhook
+      - key: CONTROL_COOKIE_SECURE
+        value: "true"
+      - key: MANUAL_PAYMENT_IN_TELEGRAM_ENABLED
+        value: "false"
+
+      # Enter these values in Render when the Blueprint is first created.
+      - key: DATABASE_URL
+        sync: false
+      - key: BOT_TOKEN
+        sync: false
+      - key: BOT_USERNAME
+        sync: false
+      - key: TELEGRAM_WEBHOOK_BASE_URL
+        sync: false
+      - key: MINI_APP_URL
+        sync: false
+      - key: MINI_APP_ALLOWED_ORIGINS
+        sync: false
+      - key: CONTROL_ALLOWED_ORIGINS
+        sync: false
+      - key: CONTROL_OWNER_KEY
+        sync: false
+      - key: ADMIN_TELEGRAM_IDS
+        sync: false
+      - key: ZEMEN_OPS_GROUP_ID
+        sync: false
+      - key: ZEMEN_OPS_TOPIC_NEW_USERS
+        sync: false
+      - key: ZEMEN_OPS_TOPIC_PAYMENTS
+        sync: false
+      - key: ZEMEN_OPS_TOPIC_SALES
+        sync: false
+      - key: ZEMEN_OPS_TOPIC_SUPPORT
+        sync: false
+      - key: ZEMEN_OPS_TOPIC_ALERTS
+        sync: false
+      - key: TELEGRAM_STORAGE_CHAT_ID
+        sync: false
+      - key: PUBLIC_API_BASE_URL
+        sync: false
+      # Telegram permits only A-Z, a-z, 0-9, underscore and hyphen here.
+      # Render's generated base64 values can contain invalid characters.
+      - key: TELEGRAM_WEBHOOK_SECRET
+        sync: false
+
+      # Render creates these private random values once per Blueprint service.
+      - key: MINI_APP_SESSION_SECRET
+        generateValue: true
+      - key: CONTROL_SESSION_SECRET
+        generateValue: true
+      - key: OPS_API_KEY
+        generateValue: true

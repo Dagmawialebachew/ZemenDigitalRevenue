@@ -1,0 +1,8 @@
+aiogram==3.30.0
+fastapi==0.140.8
+uvicorn[standard]==0.51.0
+pydantic-settings==2.14.2
+asyncpg>=0.30.0,<1.0.0
+structlog==26.1.0
+orjson==3.11.9
+python-multipart>=0.0.20,<1.0.0

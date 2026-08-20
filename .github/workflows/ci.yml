@@ -1,0 +1,36 @@
+name: Zemen CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+      - run: pip install -r requirements.txt pytest
+      - run: PYTHONPATH=. pytest -q
+      - run: python -m compileall -q backend bot database shared workers scripts main.py
+
+  frontends:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            miniapp/package.json
+            dashboard/package.json
+      - name: Build Mini App
+        working-directory: miniapp
+        run: npm install --no-audit --no-fund && VITE_BASE_PATH=/store/ VITE_API_BASE_URL=/api/miniapp npm run build
+      - name: Build Zemen Control
+        working-directory: dashboard
+        run: npm install --no-audit --no-fund && VITE_BASE_PATH=/control/ VITE_API_BASE= npm run build
