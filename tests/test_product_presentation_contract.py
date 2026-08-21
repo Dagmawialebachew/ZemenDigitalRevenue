@@ -49,9 +49,11 @@ def test_miniapp_explains_the_telegram_payment_handoff() -> None:
     copy = (ROOT / "miniapp/src/i18n/index.ts").read_text(encoding="utf-8")
     assert "showPopup" not in app
     assert "payment-handoff" in view
-    assert "The Mini App will minimize" in copy
-    assert "Mini App መቀነሱ የተለመደ ነው" in copy
+    assert "Close this Mini App, return to Telegram" in copy
+    assert "ይህን Mini App ይዝጉ" in copy
     assert "CBE or Telebirr" in copy
+    assert "onOpenPayment" not in view
+    assert "ክፍያውን በZemen bot ይክፈቱ" not in copy
 
 
 def test_miniapp_uses_a_visible_gallery_and_readable_description() -> None:
@@ -59,3 +61,15 @@ def test_miniapp_uses_a_visible_gallery_and_readable_description() -> None:
     assert "descriptionParagraphs" in view
     assert "media-rail" in view
     assert "media-counter" in view
+
+
+def test_sample_pdf_uses_telegram_external_link_handling() -> None:
+    app = (ROOT / "miniapp/src/App.tsx").read_text(encoding="utf-8")
+    view = (ROOT / "miniapp/src/views/ProductView.tsx").read_text(encoding="utf-8")
+    webapp = (ROOT / "miniapp/src/telegram/webapp.ts").read_text(encoding="utf-8")
+
+    assert "onOpenSample={openExternal}" in app
+    assert "event.preventDefault()" in view
+    assert "onOpenSample(samplePdf.url)" in view
+    assert "ሳምፕ ፕሪቪው" in view
+    assert "tg.openLink(url)" in webapp

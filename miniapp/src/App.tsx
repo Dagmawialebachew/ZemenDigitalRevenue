@@ -12,7 +12,7 @@ import { LibraryView } from './views/LibraryView'
 import { ProductView } from './views/ProductView'
 import { PolicyView } from './views/PolicyView'
 import { StoreView } from './views/StoreView'
-import { haptic, openTelegram, prepareTelegramShell, tg } from './telegram/webapp'
+import { haptic, openExternal, openTelegram, prepareTelegramShell, tg } from './telegram/webapp'
 
 type Screen = { kind: 'tab'; tab: Tab } | { kind: 'product'; slug: string } | { kind: 'policy'; policy: PolicyKind }
 
@@ -176,16 +176,9 @@ export default function App() {
     }
   }, [language, screen.kind])
 
-  const openPaymentChat = useCallback(() => {
-    if (checkout?.chat_url) openTelegram(checkout.chat_url)
-  }, [checkout])
-
   const buy = async () => {
     if (!product || product.is_owned) return
-    if (checkout) {
-      openPaymentChat()
-      return
-    }
+    if (checkout) return
     setCheckoutLoading(true)
     setError('')
     try {
@@ -203,14 +196,13 @@ export default function App() {
   useEffect(() => {
     if (!tg) return
     const button = tg.MainButton
-    if (screen.kind !== 'product' || !product || product.is_owned) {
+    if (screen.kind !== 'product' || !product || product.is_owned || checkout) {
       button.hide()
       return
     }
-    const handler = () => { checkout ? openPaymentChat() : void buy() }
-    const reviewing = checkout?.payment_status === 'pending_review' || checkout?.payment_status === 'flagged'
+    const handler = () => { void buy() }
     button.setParams({
-      text: checkout ? (reviewing ? copy.checkPayment : copy.openPayment) : checkoutLoading ? copy.preparingPayment : `${copy.getIt} · ${product.display_price_br} Br`,
+      text: checkoutLoading ? copy.preparingPayment : `${copy.getIt} · ${product.display_price_br} Br`,
       color: '#8BDF31',
       text_color: '#07100A',
       has_shine_effect: true,
@@ -220,7 +212,7 @@ export default function App() {
     if (checkoutLoading) button.disable().showProgress()
     else button.hideProgress().enable()
     return () => { button.offClick(handler); button.hide() }
-  }, [screen, product, checkout, checkoutLoading, copy.checkPayment, copy.getIt, copy.openPayment, copy.preparingPayment, openPaymentChat])
+  }, [screen, product, checkout, checkoutLoading, copy.getIt, copy.preparingPayment])
 
   const activeTab = useMemo<Tab>(() => screen.kind === 'tab' ? screen.tab : screen.kind === 'product' ? 'store' : 'account', [screen])
 
@@ -231,7 +223,7 @@ export default function App() {
   let content
   if (screen.kind === 'product') {
     content = product
-      ? <ProductView product={product} language={language} checkout={checkout} checkoutLoading={checkoutLoading} onBuy={buy} onOpenPayment={openPaymentChat} onPreview={() => void api.productAction(product.slug, 'preview')} onPolicy={openPolicy} />
+      ? <ProductView product={product} language={language} checkout={checkout} checkoutLoading={checkoutLoading} onBuy={buy} onOpenSample={openExternal} onPreview={() => void api.productAction(product.slug, 'preview')} onPolicy={openPolicy} />
       : <LoadingState label={copy.loading} />
   } else if (screen.kind === 'policy') {
     content = policyDocument ? <PolicyView document={policyDocument} language={language} onSupport={openChat} /> : <LoadingState label={copy.loading} />

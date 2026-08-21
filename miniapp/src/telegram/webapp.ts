@@ -76,3 +76,13 @@ export function openTelegram(url: string) {
   if (tg) tg.openTelegramLink(url)
   else window.location.href = url
 }
+
+export function openExternal(url: string) {
+  if (!url) return
+  if (tg) {
+    tg.openLink(url)
+    return
+  }
+  const opened = window.open(url, '_blank', 'noopener,noreferrer')
+  if (!opened) window.location.href = url
+}

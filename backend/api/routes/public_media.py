@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import mimetypes
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request
@@ -34,7 +35,13 @@ async def product_media(media_id: UUID, request: Request):
         await bot.download(row["value"], destination=stream)
         stream.seek(0)
         mime = row["mime_type"] or mimetypes.guess_type(row["file_name"] or tg_file.file_path or "media.bin")[0] or "application/octet-stream"
-        return StreamingResponse(stream, media_type=mime, headers={"Cache-Control":"public, max-age=3600, stale-while-revalidate=86400"})
+        filename = row["file_name"] or (tg_file.file_path or "media.bin").rsplit("/", 1)[-1]
+        headers = {
+            "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
+            "Content-Disposition": f"inline; filename*=UTF-8''{quote(filename)}",
+            "Content-Length": str(stream.getbuffer().nbytes),
+        }
+        return StreamingResponse(stream, media_type=mime, headers=headers)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Could not load product media: {type(exc).__name__}") from None
 

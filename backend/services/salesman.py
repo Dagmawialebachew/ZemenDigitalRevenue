@@ -316,12 +316,6 @@ class SalesmanService:
             session = await self.sessions.get(conn, user_id=user_id)
             if not session or not session["focus_product_id"]:
                 return
-            await self.journeys.record_unique_signal(
-                conn,
-                user_id=user_id,
-                product_id=session["focus_product_id"],
-                signal_key=signal_key,
-            )
             await self.events.append(
                 conn,
                 event_type=signal_key,
