@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     zemen_ops_topic_sales: int | None = None
     zemen_ops_topic_support: int | None = None
     zemen_ops_topic_alerts: int | None = None
+    zemen_ops_topic_errors: int | None = None
     admin_telegram_ids: Annotated[tuple[int, ...], NoDecode] = Field(default_factory=tuple)
 
     database_url: str = ""
@@ -49,7 +50,13 @@ class Settings(BaseSettings):
 
     workers_enabled: bool = True
     worker_concurrency: int = 4
-    worker_queues: Annotated[tuple[str, ...], NoDecode] = ("default", "telegram", "delivery", "automation", "broadcast")
+    worker_queues: Annotated[tuple[str, ...], NoDecode] = (
+        "default",
+        "telegram",
+        "delivery",
+        "automation",
+        "broadcast",
+    )
     worker_listen_notify_enabled: bool = True
     worker_lease_seconds: int = 180
     worker_poll_fallback_seconds: float = 10.0
@@ -87,7 +94,6 @@ class Settings(BaseSettings):
     control_login_window_seconds: int = 900
     static_apps_enabled: bool = False
 
-
     # SECTION 10 — Product Control / Telegram-backed product storage
     telegram_storage_chat_id: int | None = None
     public_api_base_url: str = "http://127.0.0.1:8000"
@@ -120,7 +126,6 @@ class Settings(BaseSettings):
             return tuple(int(item) for item in value)
         raise ValueError("ADMIN_TELEGRAM_IDS must be comma-separated integers")
 
-
     @field_validator("mini_app_allowed_origins", mode="before")
     @classmethod
     def parse_mini_app_origins(cls, value: object) -> tuple[str, ...]:
@@ -131,7 +136,6 @@ class Settings(BaseSettings):
         if isinstance(value, (list, tuple, set)):
             return tuple(str(item).strip().rstrip("/") for item in value if str(item).strip())
         raise ValueError("MINI_APP_ALLOWED_ORIGINS must be comma-separated origins")
-
 
     @field_validator("control_allowed_origins", mode="before")
     @classmethod

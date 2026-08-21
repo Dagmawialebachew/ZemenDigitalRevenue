@@ -11,6 +11,7 @@ import structlog
 from backend.core.config import Settings
 from backend.db.pool import Database
 from backend.repositories.jobs import JobRepository
+from backend.services.error_reporting import ErrorReporter
 from workers.backoff import retry_delay_seconds
 from workers.context import WorkerContext
 from workers.errors import JobLeaseLost, PermanentJobError, RetryableJobError
@@ -31,11 +32,13 @@ class WorkerSupervisor:
         settings: Settings,
         registry: JobRegistry,
         bot: Any,
+        error_reporter: ErrorReporter | None = None,
     ) -> None:
         self.db = db
         self.settings = settings
         self.registry = registry
         self.bot = bot
+        self.error_reporter = error_reporter
         self.jobs = JobRepository(db)
         self.stop_event = asyncio.Event()
         self.wake_event = asyncio.Event()
@@ -95,6 +98,8 @@ class WorkerSupervisor:
                 "worker_supervisor_taskgroup_failed",
                 errors=[str(error) for error in group.exceptions],
             )
+            if self.error_reporter is not None:
+                self.error_reporter.schedule(group, surface="worker_supervisor")
 
     async def _worker_loop(self, worker_id: str) -> None:
         ctx = WorkerContext(settings=self.settings, db=self.db, jobs=self.jobs, bot=self.bot)
@@ -111,8 +116,14 @@ class WorkerSupervisor:
                 await self._execute(ctx, worker_id, job)
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as exc:
                 log.exception("worker_loop_error", worker_id=worker_id)
+                if self.error_reporter is not None:
+                    self.error_reporter.schedule(
+                        exc,
+                        surface="worker_loop",
+                        context={"worker_id": worker_id},
+                    )
                 await self._sleep_or_stop(self.settings.worker_error_sleep_seconds)
 
     async def _execute(self, ctx: WorkerContext, worker_id: str, job: Job) -> None:
@@ -160,6 +171,12 @@ class WorkerSupervisor:
             raise
         except Exception as exc:
             log.exception("job_handler_unexpected_error", job_id=job.id, job_type=job.job_type)
+            if self.error_reporter is not None:
+                self.error_reporter.schedule(
+                    exc,
+                    surface="worker_job",
+                    context={"job_id": job.id, "job_type": job.job_type},
+                )
             await self._retry_or_fail(
                 job,
                 worker_id,
@@ -184,10 +201,14 @@ class WorkerSupervisor:
         if job.final_attempt:
             await self._terminal_failure(job, worker_id, error_code, error_message)
             return
-        delay = explicit_delay if explicit_delay is not None else retry_delay_seconds(
-            job.attempts,
-            base_seconds=self.settings.worker_retry_base_seconds,
-            cap_seconds=self.settings.worker_retry_cap_seconds,
+        delay = (
+            explicit_delay
+            if explicit_delay is not None
+            else retry_delay_seconds(
+                job.attempts,
+                base_seconds=self.settings.worker_retry_base_seconds,
+                cap_seconds=self.settings.worker_retry_cap_seconds,
+            )
         )
         await self.jobs.retry(
             job=job,
@@ -247,8 +268,14 @@ class WorkerSupervisor:
                             max_attempts=5,
                         ),
                     )
-            except Exception:
+            except Exception as exc:
                 log.exception("job_failure_alert_enqueue_failed", job_id=job.id)
+                if self.error_reporter is not None:
+                    self.error_reporter.schedule(
+                        exc,
+                        surface="worker_alert",
+                        context={"job_id": job.id, "job_type": job.job_type},
+                    )
         log.error(
             "job_failed_terminally",
             job_id=job.id,
@@ -287,8 +314,10 @@ class WorkerSupervisor:
                     log.warning("stale_jobs_recovered", requeued=requeued, failed=failed)
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as exc:
                 log.exception("stale_job_recovery_failed")
+                if self.error_reporter is not None:
+                    self.error_reporter.schedule(exc, surface="worker_recovery")
             await self._sleep_or_stop(self.settings.worker_recovery_interval_seconds)
 
     async def _notification_listener(self) -> None:
@@ -296,6 +325,7 @@ class WorkerSupervisor:
         while not self.stop_event.is_set():
             try:
                 async with pool.acquire() as conn:
+
                     def on_notify(*_args: object) -> None:
                         self.wake_event.set()
 
@@ -307,25 +337,23 @@ class WorkerSupervisor:
                         await conn.remove_listener(JOB_NOTIFY_CHANNEL, on_notify)
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as exc:
                 log.exception("job_notification_listener_failed")
+                if self.error_reporter is not None:
+                    self.error_reporter.schedule(exc, surface="worker_listener")
                 await self._sleep_or_stop(self.settings.worker_error_sleep_seconds)
 
     async def _wait_for_work(self) -> None:
         self.wake_event.clear()
-        try:
+        with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(
                 self.wake_event.wait(),
                 timeout=self.settings.worker_poll_fallback_seconds,
             )
-        except TimeoutError:
-            pass
 
     async def _sleep_or_stop(self, seconds: float) -> None:
         if seconds <= 0:
             await asyncio.sleep(0)
             return
-        try:
+        with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(self.stop_event.wait(), timeout=seconds)
-        except TimeoutError:
-            pass

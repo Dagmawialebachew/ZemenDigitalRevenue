@@ -20,6 +20,7 @@ _TOPIC_SETTING = {
     "sales": "zemen_ops_topic_sales",
     "support": "zemen_ops_topic_support",
     "alerts": "zemen_ops_topic_alerts",
+    "errors": "zemen_ops_topic_errors",
 }
 
 

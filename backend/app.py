@@ -3,22 +3,25 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager, suppress
 
+import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import structlog
 
 from backend.api.router import api_router
 from backend.core.config import get_settings
 from backend.core.logging import configure_logging
+from backend.db.pool import Database
 from backend.middleware.control_security import ControlMutationGuardMiddleware
+from backend.middleware.error_reporting import ErrorReportingMiddleware
 from backend.middleware.security_headers import SecurityHeadersMiddleware
 from backend.middleware.worker_wake import WorkerWakeMiddleware
-from backend.static_apps import mount_static_apps
-from backend.db.pool import Database
-from bot.factory import create_bot, create_dispatcher
-from bot.services.setup import configure_bot_ui
-from backend.services.operations import OperationsService
+from backend.services.error_reporting import ErrorReporter
 from backend.services.marketing import MarketingService
+from backend.services.operations import OperationsService
+from backend.static_apps import mount_static_apps
+from bot.factory import create_bot, create_dispatcher
+from bot.services.background import configure_background_error_reporting
+from bot.services.setup import configure_bot_ui
 from shared.constants import BotMode
 from workers.runtime import create_worker_supervisor
 
@@ -35,11 +38,30 @@ async def lifespan(app: FastAPI):
         max_size=settings.db_max_pool_size,
         max_inactive_connection_lifetime=settings.db_max_inactive_connection_lifetime_seconds,
     )
-    await db.connect()
+    try:
+        await db.connect()
+    except Exception as exc:
+        # Database startup failures happen before the normal bot lifecycle exists.
+        # Use a short-lived bot so Render outages still reach the private Errors topic.
+        if settings.bot_token:
+            try:
+                emergency_bot = create_bot(settings)
+                try:
+                    await ErrorReporter(bot=emergency_bot, settings=settings).report(
+                        exc,
+                        surface="application_startup",
+                        context={"component": "database"},
+                    )
+                finally:
+                    await emergency_bot.session.close()
+            except Exception:
+                log.exception("startup_error_notification_failed")
+        raise
     app.state.db = db
     app.state.bot = None
     app.state.dispatcher = None
     app.state.workers = None
+    app.state.error_reporter = None
     polling_task: asyncio.Task[None] | None = None
 
     errors = settings.runtime_errors()
@@ -49,12 +71,22 @@ async def lifespan(app: FastAPI):
     bot = None
     if settings.bot_token:
         if db.pool is None:
-            log.error("telegram_not_started", reason="DATABASE_URL is required by S04 salesman core")
+            log.error(
+                "telegram_not_started",
+                reason="DATABASE_URL is required by S04 salesman core",
+            )
         else:
             bot = create_bot(settings)
-            dispatcher = create_dispatcher(db=db, settings=settings)
+            error_reporter = ErrorReporter(bot=bot, settings=settings)
+            configure_background_error_reporting(error_reporter)
+            dispatcher = create_dispatcher(
+                db=db,
+                settings=settings,
+                error_reporter=error_reporter,
+            )
             app.state.bot = bot
             app.state.dispatcher = dispatcher
+            app.state.error_reporter = error_reporter
             await configure_bot_ui(bot, settings)
 
             if settings.bot_mode == BotMode.POLLING:
@@ -72,7 +104,12 @@ async def lifespan(app: FastAPI):
                 log.info("telegram_webhook_configured", url=settings.webhook_url)
 
     if settings.workers_enabled and db.pool is not None:
-        workers = create_worker_supervisor(db=db, settings=settings, bot=bot)
+        workers = create_worker_supervisor(
+            db=db,
+            settings=settings,
+            bot=bot,
+            error_reporter=app.state.error_reporter,
+        )
         await workers.start()
         app.state.workers = workers
         await OperationsService(db, settings).ensure_maintenance_job()
@@ -89,6 +126,7 @@ async def lifespan(app: FastAPI):
                 await polling_task
         if app.state.bot is not None:
             await app.state.bot.session.close()
+        configure_background_error_reporting(None)
         await db.close()
         log.info("zemen_shutdown_complete")
 
@@ -100,10 +138,13 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     settings = get_settings()
-    allowed_origins = tuple(dict.fromkeys((*settings.mini_app_allowed_origins, *settings.control_allowed_origins)))
+    allowed_origins = tuple(
+        dict.fromkeys((*settings.mini_app_allowed_origins, *settings.control_allowed_origins))
+    )
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(WorkerWakeMiddleware)
     app.add_middleware(ControlMutationGuardMiddleware, settings=settings)
+    app.add_middleware(ErrorReportingMiddleware)
     if allowed_origins:
         app.add_middleware(
             CORSMiddleware,

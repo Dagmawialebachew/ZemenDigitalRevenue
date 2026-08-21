@@ -92,6 +92,8 @@ services:
         sync: false
       - key: ZEMEN_OPS_TOPIC_ALERTS
         sync: false
+      - key: ZEMEN_OPS_TOPIC_ERRORS
+        sync: false
       - key: TELEGRAM_STORAGE_CHAT_ID
         sync: false
       - key: PUBLIC_API_BASE_URL

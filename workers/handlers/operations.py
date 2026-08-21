@@ -3,7 +3,13 @@ from __future__ import annotations
 from html import escape
 from uuid import UUID
 
-from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramNetworkError, TelegramRetryAfter, TelegramServerError
+from aiogram.exceptions import (
+    TelegramBadRequest,
+    TelegramForbiddenError,
+    TelegramNetworkError,
+    TelegramRetryAfter,
+    TelegramServerError,
+)
 
 from backend.repositories.operations import OperationsRepository
 from backend.services.operations import OperationsService
@@ -15,7 +21,11 @@ from workers.models import Job
 
 def _map_telegram(exc: Exception) -> Exception:
     if isinstance(exc, TelegramRetryAfter):
-        return RetryableJobError("Telegram flood control", retry_after=float(exc.retry_after), code="TELEGRAM_RETRY_AFTER")
+        return RetryableJobError(
+            "Telegram flood control",
+            retry_after=float(exc.retry_after),
+            code="TELEGRAM_RETRY_AFTER",
+        )
     if isinstance(exc, (TelegramNetworkError, TelegramServerError)):
         return RetryableJobError(str(exc), code="TELEGRAM_TRANSIENT")
     if isinstance(exc, (TelegramBadRequest, TelegramForbiddenError)):
@@ -53,7 +63,11 @@ async def ops_alert_handler(ctx: WorkerContext, job: Job) -> dict[str, object]:
     try:
         msg = await ctx.bot.send_message(
             chat_id=group,
-            message_thread_id=ctx.settings.zemen_ops_topic_alerts,
+            message_thread_id=(
+                (ctx.settings.zemen_ops_topic_errors or ctx.settings.zemen_ops_topic_alerts)
+                if row["alert_type"] == "job_terminal_failure"
+                else ctx.settings.zemen_ops_topic_alerts
+            ),
             text=text,
         )
     except Exception as exc:
@@ -62,7 +76,12 @@ async def ops_alert_handler(ctx: WorkerContext, job: Job) -> dict[str, object]:
             raise mapped from exc
         raise
     async with ctx.db.transaction() as conn:
-        await repo.record_alert_message(conn, alert_id=alert_id, chat_id=int(group), message_id=msg.message_id)
+        await repo.record_alert_message(
+            conn,
+            alert_id=alert_id,
+            chat_id=int(group),
+            message_id=msg.message_id,
+        )
     return {"message_id": msg.message_id}
 
 
@@ -76,7 +95,8 @@ async def support_case_handler(ctx: WorkerContext, job: Job) -> dict[str, object
         case = await repo.support_context(conn, case_public_id=case_public_id)
         sm = await conn.fetchrow("SELECT * FROM support_messages WHERE id=$1", support_message_id)
         existing = await conn.fetchrow(
-            "SELECT * FROM support_ops_messages WHERE support_message_id=$1 LIMIT 1", support_message_id
+            "SELECT * FROM support_ops_messages WHERE support_message_id=$1 LIMIT 1",
+            support_message_id,
         )
     if case is None or sm is None:
         raise PermanentJobError("Support context not found", code="SUPPORT_NOT_FOUND")
