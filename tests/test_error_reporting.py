@@ -54,6 +54,7 @@ async def test_error_reporter_is_disabled_until_errors_topic_is_configured() -> 
 
 def test_all_runtime_surfaces_are_wired_to_error_reporting() -> None:
     app = Path("backend/app.py").read_text(encoding="utf-8")
+    middleware = Path("backend/middleware/error_reporting.py").read_text(encoding="utf-8")
     factory = Path("bot/factory.py").read_text(encoding="utf-8")
     background = Path("bot/services/background.py").read_text(encoding="utf-8")
     operations = Path("workers/handlers/operations.py").read_text(encoding="utf-8")
@@ -61,6 +62,7 @@ def test_all_runtime_surfaces_are_wired_to_error_reporting() -> None:
     blueprint = Path("render.yaml").read_text(encoding="utf-8")
 
     assert "ErrorReportingMiddleware" in app
+    assert "response.status_code >= 500" in middleware
     assert "dp.errors.register(report_unhandled_update)" in factory
     assert 'surface="background"' in background
     assert "zemen_ops_topic_errors" in operations
