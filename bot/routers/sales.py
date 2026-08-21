@@ -7,14 +7,16 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     Message,
 )
-from bot.keyboards.home import home_keyboard
+
 from backend.core.config import Settings
 from backend.db.pool import Database
 from backend.repositories.products import ProductRepository
 from backend.repositories.sessions import ConversationSessionRepository
 from backend.repositories.users import UserRepository
 from backend.services.salesman import SalesmanService
+from bot.keyboards.home import home_keyboard
 from bot.keyboards.sales import after_detail_keyboard, sales_keyboard
+from bot.services.background import run_background
 from bot.services.callbacks import answer_callback_safely
 from bot.services.current_user import load_current_entry_context
 from bot.services.product_media import send_sales_gallery, send_sales_hero, send_sample_pdf
@@ -120,15 +122,13 @@ async def send_sales_pitch(
     service = SalesmanService(db)
     presentation = await service.presentation(user_id=user_id)
 
-    if presentation.product_id is not None:
-        if await service.owns_focused_product(user_id=user_id):
-            await send_owned_product_message(
-                message=message,
-                db=db,
-                settings=settings,
-                user_id=user_id,
-            )
-            return
+    if presentation.is_owned:
+        await send_owned_product_message(
+            message=message,
+            settings=settings,
+            language=presentation.language,
+        )
+        return
 
     if presentation.product_id is None:
         await send_product_picker(
@@ -160,6 +160,10 @@ async def send_sales_pitch(
     )
     if not sent:
         await message.answer(text, reply_markup=markup)
+    run_background(
+        service.record_pitch_view(presentation),
+        name="record-sales-pitch-view",
+    )
 
 
 @router.callback_query(F.data.startswith("sales:product:"))
@@ -262,19 +266,18 @@ async def sales_detail(
     
     service = SalesmanService(db)
 
-    if await service.owns_focused_product(user_id=current.user_id):
-        await send_owned_product_message(
-            message=callback.message,
-            db=db,
-            settings=settings,
-            user_id=current.user_id,
-        )
-        return
-
     detail = await service.detail(
         user_id=current.user_id,
         kind=kind,
     )
+
+    if detail.presentation.is_owned:
+        await send_owned_product_message(
+            message=callback.message,
+            settings=settings,
+            language=detail.presentation.language,
+        )
+        return
 
     presentation = detail.presentation
 
@@ -292,30 +295,54 @@ async def sales_detail(
     )
 
     if action == "preview":
-        await service.record_media_action(user_id=current.user_id, action="gallery")
         await send_sales_gallery(
             message=callback.message,
             presentation=presentation,
             settings=settings,
         )
     elif action == "sample":
-        await service.record_media_action(user_id=current.user_id, action="sample")
         if await send_sample_pdf(
             message=callback.message,
             presentation=presentation,
             settings=settings,
             reply_markup=markup,
         ):
+            run_background(
+                service.record_detail_view(detail, kind=kind),
+                name="record-sales-detail-view",
+            )
+            run_background(
+                service.record_media_action(user_id=current.user_id, action="sample"),
+                name="record-sample-open",
+            )
             return
         unavailable = (
-            "📄 The free PDF sample is being prepared. You can still review what is inside or ask us a question."
+            "📄 The free PDF sample is being prepared. "
+            "You can still review what is inside or ask us a question."
             if presentation.language == "en"
             else "📄 ነፃው PDF ናሙና በዝግጅት ላይ ነው። እስከዚያ ድረስ የምርቱን ውስጥ ማየት ወይም ጥያቄ መጠየቅ ይችላሉ።"
         )
         await callback.message.answer(unavailable, reply_markup=markup)
+        run_background(
+            service.record_detail_view(detail, kind=kind),
+            name="record-sales-detail-view",
+        )
+        run_background(
+            service.record_media_action(user_id=current.user_id, action="sample"),
+            name="record-sample-open",
+        )
         return
 
     await callback.message.answer(detail_text(detail, kind=kind), reply_markup=markup)
+    run_background(
+        service.record_detail_view(detail, kind=kind),
+        name="record-sales-detail-view",
+    )
+    if action == "preview":
+        run_background(
+            service.record_media_action(user_id=current.user_id, action="gallery"),
+            name="record-gallery-open",
+        )
 
 
 @router.callback_query(F.data == "sales:buy")
@@ -385,13 +412,10 @@ async def sales_buy(
 async def send_owned_product_message(
     *,
     message: Message,
-    db: Database,
     settings: Settings,
-    user_id: object,
+    language: str,
 ) -> None:
-    presentation = await SalesmanService(db).presentation(user_id=user_id)
-
-    if presentation.language == "en":
+    if language == "en":
         text = (
             "✅ <b>You already own this product.</b>\n\n"
             "There’s no need to buy it again. Open your Library to access it."

@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from time import perf_counter
 
 import asyncpg
 import orjson
@@ -80,13 +81,21 @@ class Database:
     @asynccontextmanager
     async def acquire(self) -> AsyncIterator[asyncpg.Connection]:
         pool = self.require_pool()
+        started = perf_counter()
         async with pool.acquire() as conn:
+            wait_ms = (perf_counter() - started) * 1000
+            if wait_ms >= 250:
+                log.warning("database_pool_slow_acquire", wait_ms=round(wait_ms, 1))
             yield conn
 
     @asynccontextmanager
     async def transaction(self) -> AsyncIterator[asyncpg.Connection]:
         pool = self.require_pool()
+        started = perf_counter()
         async with pool.acquire() as conn:
+            wait_ms = (perf_counter() - started) * 1000
+            if wait_ms >= 250:
+                log.warning("database_pool_slow_acquire", wait_ms=round(wait_ms, 1))
             async with conn.transaction():
                 yield conn
 

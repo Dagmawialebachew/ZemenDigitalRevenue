@@ -21,14 +21,14 @@ services:
       - key: RUN_PREFLIGHT
         value: "true"
 
-      # Neon Free: allow idle connections and polling to stop long enough for
-      # compute to scale to zero. Request-driven jobs wake workers immediately.
+      # Keep one application connection ready. UptimeRobot's HEAD liveness
+      # check also executes a lightweight DB ping every five minutes.
       - key: DB_MIN_POOL_SIZE
-        value: "0"
+        value: "1"
       - key: DB_MAX_POOL_SIZE
         value: "3"
       - key: DB_MAX_INACTIVE_CONNECTION_LIFETIME_SECONDS
-        value: "60"
+        value: "600"
       - key: WORKERS_ENABLED
         value: "true"
       - key: WORKER_CONCURRENCY

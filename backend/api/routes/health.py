@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import asyncio
+
+import structlog
 from fastapi import APIRouter, Request, Response
 
 from backend.repositories.jobs import JobRepository
 from shared.constants import AIOGRAM_TARGET, APP_NAME, APP_VERSION, TELEGRAM_BOT_API_TARGET
 
 router = APIRouter(tags=["health"])
+log = structlog.get_logger(__name__)
 
 
 @router.get("/health/live")
@@ -20,9 +24,19 @@ async def live() -> dict[str, object]:
 
 
 @router.head("/health/live", include_in_schema=False)
-async def live_head() -> Response:
-    """Keep free HEAD-only uptime monitors compatible with the liveness route."""
-    return Response(status_code=200)
+async def live_head(request: Request) -> Response:
+    """Keep Render and Neon's connection path warm for free HEAD monitors."""
+    db = getattr(request.app.state, "db", None)
+    database_warm = False
+    if db is not None:
+        try:
+            database_warm = await asyncio.wait_for(db.ping(), timeout=10)
+        except Exception as exc:
+            log.warning("database_warmup_failed", error=str(exc))
+    return Response(
+        status_code=200,
+        headers={"X-Zemen-Database-Warm": "true" if database_warm else "false"},
+    )
 
 
 @router.get("/health/ready")

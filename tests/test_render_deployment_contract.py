@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -15,11 +14,12 @@ def test_render_blueprint_uses_free_backend_service_and_safe_health_check() -> N
     assert 'key: STATIC_APPS_ENABLED\n        value: "false"' in blueprint
 
 
-def test_render_blueprint_allows_neon_to_scale_to_zero() -> None:
+def test_render_blueprint_keeps_the_customer_database_path_warm() -> None:
     blueprint = (ROOT / "render.yaml").read_text(encoding="utf-8")
 
-    assert 'key: DB_MIN_POOL_SIZE\n        value: "0"' in blueprint
+    assert 'key: DB_MIN_POOL_SIZE\n        value: "1"' in blueprint
     assert 'key: DB_MAX_POOL_SIZE\n        value: "3"' in blueprint
+    assert 'key: DB_MAX_INACTIVE_CONNECTION_LIFETIME_SECONDS\n        value: "600"' in blueprint
     assert 'key: WORKER_LISTEN_NOTIFY_ENABLED\n        value: "false"' in blueprint
     assert 'key: WORKER_POLL_FALLBACK_SECONDS\n        value: "900"' in blueprint
     assert 'key: WORKER_RECOVERY_INTERVAL_SECONDS\n        value: "900"' in blueprint
