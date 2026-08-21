@@ -10,6 +10,7 @@ from backend.db.pool import Database
 from backend.domain.policies import policy_html
 from bot.keyboards.payments import purchase_policy_keyboard
 from bot.keyboards.primitives import inline_action
+from bot.services.callbacks import answer_callback_safely
 from bot.services.current_user import load_current_entry_context
 
 
@@ -78,16 +79,16 @@ async def delivery_command(message: Message, db: Database) -> None:
 @router.callback_query(F.data.startswith("legal:"))
 async def legal_document(callback: CallbackQuery, db: Database) -> None:
     if callback.message is None or callback.data is None:
-        await callback.answer()
+        await answer_callback_safely(callback)
         return
     parts = callback.data.split(":", 2)
     if len(parts) != 3 or parts[1] not in {"terms", "refund", "privacy", "delivery"}:
-        await callback.answer("Document unavailable", show_alert=True)
+        await answer_callback_safely(callback, "Document unavailable", show_alert=True)
         return
+    await answer_callback_safely(callback)
     current = await load_current_entry_context(db, telegram_user=callback.from_user)
     language = current.language_for_copy if current else "am"
     order_public_id = parts[2]
-    await callback.answer()
     await callback.message.answer(
         policy_html(parts[1], language),
         reply_markup=(

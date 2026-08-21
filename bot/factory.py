@@ -15,13 +15,16 @@ from bot.routers.payments import router as payments_router
 from bot.routers.sales import router as sales_router
 from bot.routers.start import router as start_router
 from bot.routers.support import router as support_router
+from bot.services.callbacks import ExpiredCallbackQueryMiddleware
 
 
 def create_bot(settings: Settings) -> Bot:
-    return Bot(
+    bot = Bot(
         token=settings.bot_token,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
+    bot.session.middleware(ExpiredCallbackQueryMiddleware())
+    return bot
 
 
 def create_dispatcher(*, db: Database, settings: Settings) -> Dispatcher:

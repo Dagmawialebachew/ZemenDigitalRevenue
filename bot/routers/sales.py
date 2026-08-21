@@ -15,6 +15,7 @@ from backend.repositories.sessions import ConversationSessionRepository
 from backend.repositories.users import UserRepository
 from backend.services.salesman import SalesmanService
 from bot.keyboards.sales import after_detail_keyboard, sales_keyboard
+from bot.services.callbacks import answer_callback_safely
 from bot.services.current_user import load_current_entry_context
 from bot.services.product_media import send_sales_gallery, send_sales_hero, send_sample_pdf
 from bot.services.sales_copy import detail_text, pitch_text
@@ -167,13 +168,14 @@ async def choose_sales_product(
     db: Database,
     settings: Settings,
 ) -> None:
+    await answer_callback_safely(callback)
+
     current = await load_current_entry_context(
         db,
         telegram_user=callback.from_user,
     )
 
     if callback.message is None or current is None:
-        await callback.answer()
         return
 
     product_id = callback.data.removeprefix("sales:product:")
@@ -188,10 +190,7 @@ async def choose_sales_product(
         )
 
         if product is None:
-            await callback.answer(
-                "This product is no longer available.",
-                show_alert=True,
-            )
+            await callback.message.answer("This product is no longer available.")
             return
 
         await sessions_repo.set_focus_product(
@@ -199,8 +198,6 @@ async def choose_sales_product(
             user_id=current.user_id,
             product_id=product["id"],
         )
-
-    await callback.answer("✅")
 
     await send_sales_pitch(
         message=callback.message,
@@ -216,12 +213,12 @@ async def continue_sales(
     db: Database,
     settings: Settings,
 ) -> None:
+    await answer_callback_safely(callback)
+
     current = await load_current_entry_context(
         db,
         telegram_user=callback.from_user,
     )
-
-    await callback.answer()
 
     if callback.message is None or current is None:
         return
@@ -250,12 +247,12 @@ async def sales_detail(
     db: Database,
     settings: Settings,
 ) -> None:
+    await answer_callback_safely(callback)
+
     current = await load_current_entry_context(
         db,
         telegram_user=callback.from_user,
     )
-
-    await callback.answer()
 
     if callback.message is None or current is None:
         return
@@ -327,12 +324,12 @@ async def sales_buy(
     db: Database,
     settings: Settings,
 ) -> None:
+    await answer_callback_safely(callback, "💚")
+
     current = await load_current_entry_context(
         db,
         telegram_user=callback.from_user,
     )
-
-    await callback.answer("💚")
 
     if callback.message is None or current is None:
         return
