@@ -98,6 +98,19 @@ def test_terminal_job_failure_surfaces_ops_alert():
     assert 'job.job_type != "telegram.ops.alert"' in engine
 
 
+def test_support_case_creation_atomically_reuses_the_live_context():
+    source = Path("backend/repositories/operations.py").read_text(encoding="utf-8")
+    method = source.split("async def create_or_get_support_case", 1)[1].split(
+        "async def add_support_message", 1
+    )[0]
+
+    assert "subject IS NOT DISTINCT FROM" not in method
+    assert "ON CONFLICT (" in method
+    assert "COALESCE(product_id" in method
+    assert "COALESCE(order_id" in method
+    assert "DO UPDATE SET subject=support_cases.subject" in method
+
+
 def test_delivery_handler_records_attempts_and_final_failure():
     source = Path("workers/handlers/payments.py").read_text(encoding="utf-8")
     assert "begin_delivery_attempt" in source

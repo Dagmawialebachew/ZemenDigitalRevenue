@@ -271,28 +271,21 @@ class OperationsRepository:
         order_id: UUID | None,
         subject: str | None = None,
     ) -> asyncpg.Record:
-        existing = await conn.fetchrow(
-            """
-            SELECT * FROM support_cases
-            WHERE user_id=$1
-              AND product_id IS NOT DISTINCT FROM $2
-              AND order_id IS NOT DISTINCT FROM $3
-              AND subject IS NOT DISTINCT FROM $4
-              AND status IN ('open','waiting_customer','waiting_admin')
-            ORDER BY opened_at DESC LIMIT 1
-            FOR UPDATE
-            """,
-            user_id,
-            product_id,
-            order_id,
-            subject,
-        )
-        if existing:
-            return existing
+        # The partial expression index defines one live case per
+        # user/product/order context. Infer that exact index in the INSERT so
+        # two callbacks cannot both pass a read-before-write existence check.
         return await conn.fetchrow(
             """
             INSERT INTO support_cases (public_id, user_id, product_id, order_id, subject, status)
-            VALUES ($1,$2,$3,$4,$5,'open') RETURNING *
+            VALUES ($1,$2,$3,$4,$5,'open')
+            ON CONFLICT (
+                user_id,
+                (COALESCE(product_id, '00000000-0000-0000-0000-000000000000'::uuid)),
+                (COALESCE(order_id, '00000000-0000-0000-0000-000000000000'::uuid))
+            )
+            WHERE status IN ('open','waiting_customer','waiting_admin')
+            DO UPDATE SET subject=support_cases.subject
+            RETURNING *
             """,
             public_id,
             user_id,
