@@ -45,7 +45,11 @@ async def test_error_reporter_is_disabled_until_errors_topic_is_configured() -> 
     bot = AsyncMock()
     reporter = ErrorReporter(
         bot=bot,
-        settings=Settings(workers_enabled=False, zemen_ops_group_id=-100123),
+        settings=Settings(
+            workers_enabled=False,
+            zemen_ops_group_id=-100123,
+            zemen_ops_topic_errors=None,
+        ),
     )
 
     assert not await reporter.report(_failure(), surface="api")

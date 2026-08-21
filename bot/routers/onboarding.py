@@ -18,6 +18,7 @@ async def send_onboarding_step(
     message: Message,
     db: Database,
     user_id: object,
+    campaign_product_title: str | None = None,
 ) -> OnboardingProgress:
     progress = await OnboardingService(db).resume(user_id=user_id)
     if progress.completed:
@@ -35,6 +36,7 @@ async def send_onboarding_step(
             field=progress.next_field,
             language=progress.language,
             profile=progress.profile,
+            campaign_product_title=campaign_product_title,
         ),
         reply_markup=onboarding_keyboard(
             field=progress.next_field,

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import structlog
 from aiogram import Router
 from aiogram.filters import CommandStart
 from aiogram.filters.command import CommandObject
 from aiogram.types import Message
-import structlog
 
 from backend.core.config import Settings
 from backend.db.pool import Database
@@ -77,6 +77,28 @@ async def start(
         return
 
     if not entry.profile_completed:
+        if entry.requires_onboarding_before_sales:
+            from bot.routers.onboarding import send_onboarding_step
+
+            await send_onboarding_step(
+                message=message,
+                db=db,
+                user_id=entry.user_id,
+                campaign_product_title=entry.focus_product_title,
+            )
+            return
+
+        from bot.routers.sales import send_sales_pitch
+
+        await send_sales_pitch(
+            message=message,
+            db=db,
+            settings=settings,
+            user_id=entry.user_id,
+        )
+        return
+
+    if entry.product_campaign_entry:
         from bot.routers.sales import send_sales_pitch
 
         await send_sales_pitch(

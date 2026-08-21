@@ -7,7 +7,11 @@ from typing import Any
 from aiogram.types import User as TelegramUser
 
 from backend.db.pool import Database
-from backend.domain.entry import source_touch_type
+from backend.domain.entry import (
+    is_product_campaign_entry,
+    requires_product_campaign_onboarding,
+    source_touch_type,
+)
 from backend.repositories.events import EventRepository
 from backend.repositories.jobs import JobRepository
 from backend.repositories.products import ProductRepository
@@ -41,6 +45,8 @@ class CustomerEntryContext:
     focus_product_price_br: str | None = None
     referral_username: str | None = None
     referral_created: bool = False
+    product_campaign_entry: bool = False
+    requires_onboarding_before_sales: bool = False
 
     @property
     def language_for_copy(self) -> str:
@@ -57,7 +63,9 @@ class CustomerEntryService:
         self.products = ProductRepository()
         self.events = EventRepository()
 
-    async def enter(self, *, telegram_user: TelegramUser, start: StartContext) -> CustomerEntryContext:
+    async def enter(
+        self, *, telegram_user: TelegramUser, start: StartContext
+    ) -> CustomerEntryContext:
         resolved_link = None
         referral_account = None
         referral_attribution = None
@@ -80,7 +88,9 @@ class CustomerEntryService:
             prior_session = await self.sessions.get(conn, user_id=user_id)
 
             focus_product_id = prior_session["focus_product_id"] if prior_session else None
-            focus_tracking_link_id = prior_session["focus_tracking_link_id"] if prior_session else None
+            focus_tracking_link_id = (
+                prior_session["focus_tracking_link_id"] if prior_session else None
+            )
             referral_attribution_id = (
                 prior_session["referral_attribution_id"] if prior_session else None
             )
@@ -132,7 +142,9 @@ class CustomerEntryService:
                     user_id=user_id,
                     tracking_link_id=None,
                     raw_start_payload=start.raw,
-                    touch_type=("referral" if valid_referral else ("organic" if is_new else "revisit")),
+                    touch_type=(
+                        "referral" if valid_referral else ("organic" if is_new else "revisit")
+                    ),
                 )
             elif start.kind == StartKind.ORDER:
                 # Internal Mini App → bot payment handoff. Do not count it as a new
@@ -160,6 +172,30 @@ class CustomerEntryService:
                 )
 
             profile_completed = bool(profile and profile["onboarding_completed_at"])
+            focused_tracking_link = resolved_link
+            if (
+                not profile_completed
+                and focused_tracking_link is None
+                and focus_tracking_link_id is not None
+            ):
+                # Recognizes incomplete visitors from already-running campaigns,
+                # including the users acquired before this routing fix.
+                focused_tracking_link = await self.tracking.get_by_id(
+                    conn,
+                    focus_tracking_link_id,
+                )
+            tracking_product_id = (
+                focused_tracking_link["product_id"] if focused_tracking_link else None
+            )
+            product_campaign_entry = is_product_campaign_entry(
+                tracking_product_id=tracking_product_id,
+                focus_product_id=focus_product_id,
+            )
+            requires_onboarding = requires_product_campaign_onboarding(
+                profile_completed=profile_completed,
+                tracking_product_id=tracking_product_id,
+                focus_product_id=focus_product_id,
+            )
             active_flow = (
                 "sales"
                 if profile_completed
@@ -249,6 +285,8 @@ class CustomerEntryService:
                     active_referral["referrer_username"] if active_referral else None
                 ),
                 referral_created=referral_created,
+                product_campaign_entry=product_campaign_entry,
+                requires_onboarding_before_sales=requires_onboarding,
             )
 
         if result.is_new_user:
@@ -257,7 +295,9 @@ class CustomerEntryService:
 
     async def _enqueue_new_user_ops(self, entry: CustomerEntryContext) -> None:
         username = f"@{escape(entry.username)}" if entry.username else "No username"
-        source = entry.source_name or ("Referral" if entry.start_kind == StartKind.REFERRAL else "Organic")
+        source = entry.source_name or (
+            "Referral" if entry.start_kind == StartKind.REFERRAL else "Organic"
+        )
         creative = entry.creative or "—"
         product = entry.focus_product_title or "Not selected yet"
         referrer = f"@{escape(entry.referral_username)}" if entry.referral_username else "None"

@@ -22,3 +22,24 @@ def source_touch_type(*, is_new_user: bool, resolved: bool) -> str:
 
 def should_notify_new_user(*, is_new_user: bool) -> bool:
     return is_new_user
+
+
+def requires_product_campaign_onboarding(
+    *,
+    profile_completed: bool,
+    tracking_product_id: object | None,
+    focus_product_id: object | None,
+) -> bool:
+    """Require qualification only for incomplete, product-scoped campaign visitors."""
+    return not profile_completed and is_product_campaign_entry(
+        tracking_product_id=tracking_product_id,
+        focus_product_id=focus_product_id,
+    )
+
+
+def is_product_campaign_entry(
+    *,
+    tracking_product_id: object | None,
+    focus_product_id: object | None,
+) -> bool:
+    return tracking_product_id is not None and focus_product_id is not None

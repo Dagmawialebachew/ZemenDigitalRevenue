@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from backend.domain.sales import PROFILE_FIELDS, SalesProfile
+from html import escape
 
+from backend.domain.sales import PROFILE_FIELDS, SalesProfile
 
 ROLE_LABELS = {
     "am": {
@@ -79,7 +80,13 @@ def _progress(field: str) -> tuple[int, str]:
     return idx, "▰" * idx + "▱" * (len(PROFILE_FIELDS) - idx)
 
 
-def question_text(*, field: str, language: str, profile: SalesProfile) -> str:
+def question_text(
+    *,
+    field: str,
+    language: str,
+    profile: SalesProfile,
+    campaign_product_title: str | None = None,
+) -> str:
     idx, bar = _progress(field)
 
     if language == "en":
@@ -90,7 +97,8 @@ def question_text(*, field: str, language: str, profile: SalesProfile) -> str:
             ),
             "ai_experience": (
                 "🧠 <b>How comfortable are you with AI today?</b>\n\n"
-                "No right answer. I just don't want to talk to a beginner like an expert — or the other way around."
+                "No right answer. I just don't want to talk to a beginner like an expert — "
+                "or the other way around."
             ),
             "main_goal": (
                 "🎯 <b>What would make AI genuinely useful to you?</b>\n\n"
@@ -103,10 +111,7 @@ def question_text(*, field: str, language: str, profile: SalesProfile) -> str:
         }
     else:
         questions = {
-            "role": (
-                "👤 <b>መጀመሪያ — አሁን ያሉበትን ሁኔታ ልወቅ</b>\n\n"
-                "ከእነዚህ ውስጥ እርስዎን በጣም የሚገልጸውን ይምረጡ።"
-            ),
+            "role": ("👤 <b>መጀመሪያ — አሁን ያሉበትን ሁኔታ ልወቅ</b>\n\nከእነዚህ ውስጥ እርስዎን በጣም የሚገልጸውን ይምረጡ።"),
             "ai_experience": (
                 "🧠 <b>AI ጋር አሁን ያለዎት ልምድ ምን ያህል ነው?</b>\n\n"
                 "ትክክል ወይም ስህተት መልስ የለም። ጀማሪን እንደ expert ማናገር አንፈልግም 😄"
@@ -116,12 +121,27 @@ def question_text(*, field: str, language: str, profile: SalesProfile) -> str:
                 "አሁን በጣም የሚፈልጉትን ውጤት ይምረጡ።"
             ),
             "main_obstacle": (
-                "🚧 <b>የመጨረሻው — በጣም የሚያስቸግርዎት የቱ ነው?</b>\n\n"
-                "በጣም የሚቀርብዎትን ይምረጡ፤ ከዚያ ቀጥታ እንገባለን።"
+                "🚧 <b>የመጨረሻው — በጣም የሚያስቸግርዎት የቱ ነው?</b>\n\nበጣም የሚቀርብዎትን ይምረጡ፤ ከዚያ ቀጥታ እንገባለን።"
             ),
         }
 
-    return f"{bar}  <b>{idx}/4</b>\n\n{questions[field]}"
+    campaign_intro = ""
+    if campaign_product_title and field == "role":
+        title = escape(campaign_product_title)
+        if language == "en":
+            campaign_intro = (
+                f"📦 <b>{title} is ready for you.</b>\n\n"
+                "Before I show you everything, answer 4 quick tap-only questions so I can "
+                "match the product to your situation. It takes less than 30 seconds.\n\n"
+            )
+        else:
+            campaign_intro = (
+                f"📦 <b>{title} ለእርስዎ ዝግጁ ነው።</b>\n\n"
+                "ሙሉ ዝርዝሩን ከማሳየቴ በፊት ምክሩን ከእርስዎ ሁኔታ ጋር ለማስማማት "
+                "4 ፈጣን የአዝራር ጥያቄዎችን ይመልሱ። ከ30 ሰከንድ በታች ይወስዳል።\n\n"
+            )
+
+    return f"{campaign_intro}{bar}  <b>{idx}/4</b>\n\n{questions[field]}"
 
 
 def completion_text(*, first_name: str, language: str, profile: SalesProfile) -> str:
@@ -134,7 +154,7 @@ def completion_text(*, first_name: str, language: str, profile: SalesProfile) ->
     values = (profile.role, profile.ai_experience, profile.main_goal, profile.main_obstacle)
     rendered = [
         label_map.get(value or "", value or "—")
-        for label_map, value in zip(label_maps, values)
+        for label_map, value in zip(label_maps, values, strict=True)
     ]
     summary = "\n".join(rendered)
 
@@ -142,7 +162,8 @@ def completion_text(*, first_name: str, language: str, profile: SalesProfile) ->
         return (
             f"✅ <b>Got it, {first_name}.</b>\n\n"
             f"{summary}\n\n"
-            "Now I know enough to stop showing you generic stuff. Let me show you the part that actually matches <b>you</b>. 👇"
+            "Now I know enough to stop showing you generic stuff. Let me show you the part "
+            "that actually matches <b>you</b>. 👇"
         )
 
     return (

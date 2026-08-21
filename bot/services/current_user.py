@@ -3,6 +3,10 @@ from __future__ import annotations
 from aiogram.types import User as TelegramUser
 
 from backend.db.pool import Database
+from backend.domain.entry import (
+    is_product_campaign_entry,
+    requires_product_campaign_onboarding,
+)
 from backend.services.customer_entry import CustomerEntryContext
 from shared.deeplinks import StartKind
 
@@ -25,6 +29,7 @@ async def load_current_entry_context(
                 (up.onboarding_completed_at IS NOT NULL) AS profile_completed,
                 cs.last_start_kind,
                 cs.focus_product_id,
+                tl.product_id AS tracking_product_id,
                 COALESCE(pt.title, fallback.title, p.slug) AS focus_product_title,
                 p.regular_price_br AS focus_product_price_br
             FROM users u
@@ -33,6 +38,8 @@ async def load_current_entry_context(
             LEFT JOIN products p
                 ON p.id = cs.focus_product_id
                AND p.status = 'active'
+            LEFT JOIN tracking_links tl
+                ON tl.id = cs.focus_tracking_link_id
             LEFT JOIN product_translations pt
                 ON pt.product_id = p.id
                AND pt.language = COALESCE(u.preferred_language, 'am')
@@ -66,5 +73,14 @@ async def load_current_entry_context(
                 str(current["focus_product_price_br"])
                 if current["focus_product_price_br"] is not None
                 else None
+            ),
+            requires_onboarding_before_sales=requires_product_campaign_onboarding(
+                profile_completed=bool(current["profile_completed"]),
+                tracking_product_id=current["tracking_product_id"],
+                focus_product_id=current["focus_product_id"],
+            ),
+            product_campaign_entry=is_product_campaign_entry(
+                tracking_product_id=current["tracking_product_id"],
+                focus_product_id=current["focus_product_id"],
             ),
         )

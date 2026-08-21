@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import suppress
+
 from aiogram import F, Router
 from aiogram.types import CallbackQuery
 
@@ -37,6 +39,23 @@ async def choose_language(
         return
 
     await callback.answer("✅")
+    if (
+        callback.message
+        and not current.profile_completed
+        and current.requires_onboarding_before_sales
+    ):
+        with suppress(Exception):
+            await callback.message.edit_reply_markup(reply_markup=None)
+        from bot.routers.onboarding import send_onboarding_step
+
+        await send_onboarding_step(
+            message=callback.message,
+            db=db,
+            user_id=current.user_id,
+            campaign_product_title=current.focus_product_title,
+        )
+        return
+
     copy = after_language(current, language=language)
     chat_id = callback.message.chat.id if callback.message else callback.from_user.id
     await send_rich_or_fallback(
@@ -48,10 +67,8 @@ async def choose_language(
         enabled=settings.telegram_use_rich_messages,
     )
     if callback.message:
-        try:
+        with suppress(Exception):
             await callback.message.edit_reply_markup(reply_markup=None)
-        except Exception:
-            pass
         from bot.routers.sales import send_sales_pitch
 
         await send_sales_pitch(
