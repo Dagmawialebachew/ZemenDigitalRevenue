@@ -93,3 +93,42 @@ class ProductRepository:
             """,
             language,
         )
+
+    async def list_active_media(
+        self,
+        conn: asyncpg.Connection,
+        *,
+        product_id: Any,
+        language: str,
+    ) -> list[asyncpg.Record]:
+        return list(
+            await conn.fetch(
+                """
+                SELECT pm.id,pm.media_type,pm.storage_type,pm.value,pm.alt_text,
+                       pm.caption,pm.sort_order,pm.mime_type,pm.file_name,pm.language
+                FROM product_media pm
+                JOIN products p ON p.id=pm.product_id
+                WHERE pm.product_id=$1 AND pm.is_active=TRUE
+                  AND pm.media_type IN ('cover','thumbnail','preview','gallery','video')
+                  AND (
+                    pm.language=$2 OR pm.language IS NULL OR (
+                      pm.language=p.default_language AND NOT EXISTS (
+                        SELECT 1 FROM product_media preferred
+                        WHERE preferred.product_id=pm.product_id
+                          AND preferred.media_type=pm.media_type
+                          AND preferred.is_active=TRUE
+                          AND (preferred.language=$2 OR preferred.language IS NULL)
+                      )
+                    )
+                  )
+                ORDER BY CASE WHEN pm.language=$2 THEN 0 WHEN pm.language IS NULL THEN 1 ELSE 2 END,
+                         CASE pm.media_type
+                           WHEN 'cover' THEN 0 WHEN 'thumbnail' THEN 1
+                           WHEN 'gallery' THEN 2 WHEN 'preview' THEN 3
+                           WHEN 'video' THEN 4 ELSE 5 END,
+                         pm.sort_order ASC,pm.created_at ASC
+                """,
+                product_id,
+                language,
+            )
+        )

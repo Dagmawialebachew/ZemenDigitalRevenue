@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from decimal import Decimal
+import mimetypes
 from typing import Any
 from uuid import UUID
 
@@ -187,6 +187,9 @@ class ProductControlService:
             raise ValueError("Media value is required")
         if storage_type == "url" and not value.startswith(("https://", "http://")):
             raise ValueError("Media URL must start with http:// or https://")
+        mime_type = data.get("mime_type") or mimetypes.guess_type(
+            str(data.get("file_name") or value).split("?", 1)[0]
+        )[0]
         async with self.db.transaction() as conn:
             if await self.repo.get_product(conn, product_id=product_id, for_update=True) is None:
                 raise LookupError("Product not found")
@@ -195,13 +198,13 @@ class ProductControlService:
             row = await conn.fetchrow(
                 """INSERT INTO product_media(product_id,language,media_type,storage_type,value,alt_text,caption,sort_order,is_active,mime_type,file_name)
                    VALUES($1,$2,$3,$4,$5,$6,$7,$8,TRUE,$9,$10) RETURNING *""",
-                product_id, language, media_type, storage_type, value, data.get("alt_text"), data.get("caption"), int(data.get("sort_order") or 0), data.get("mime_type"), data.get("file_name"),
+                product_id, language, media_type, storage_type, value, data.get("alt_text"), data.get("caption"), int(data.get("sort_order") or 0), mime_type, data.get("file_name"),
             )
             admin_id = await self.repo.admin_id(conn, telegram_id=admin_telegram_id)
             await self.repo.insert_audit(conn, admin_id=admin_id, action="product.media.add", entity_type="product_media", entity_id=str(row["id"]), after=jsonable_encoder(dict(row)))
         item=dict(row); item["public_url"]=self._media_url(row["id"],row["storage_type"],row["value"]); return item
 
-    async def upload_media(self, *, product_id: UUID, admin_telegram_id: int, filename: str, content_type: str | None, data: bytes, media_type: str, language: str | None, alt_text: str | None, sort_order: int) -> dict[str, Any]:
+    async def upload_media(self, *, product_id: UUID, admin_telegram_id: int, filename: str, content_type: str | None, data: bytes, media_type: str, language: str | None, alt_text: str | None, caption: str | None, sort_order: int) -> dict[str, Any]:
         if not self.bot or not self.settings.telegram_storage_chat_id:
             raise RuntimeError("TELEGRAM_STORAGE_CHAT_ID and a connected bot are required for dashboard uploads")
         if media_type not in MEDIA_TYPES:
@@ -209,18 +212,96 @@ class ProductControlService:
         max_bytes = self.settings.product_upload_max_mb * 1024 * 1024
         if not data or len(data) > max_bytes:
             raise ValueError(f"File must be between 1 byte and {self.settings.product_upload_max_mb} MB")
-        msg = await self.bot.send_document(
-            chat_id=self.settings.telegram_storage_chat_id,
-            document=BufferedInputFile(data, filename=filename),
-            caption=f"Zemen product media · {product_id} · {media_type}",
-        )
-        if msg.document is None:
-            raise RuntimeError("Telegram did not return a document file_id")
+        mime_type = content_type or mimetypes.guess_type(filename)[0] or "application/octet-stream"
+        if media_type in {"cover", "gallery", "thumbnail"} and not mime_type.startswith("image/"):
+            raise ValueError(f"{media_type.title()} media must be an image")
+        if media_type == "video" and not mime_type.startswith("video/"):
+            raise ValueError("Video media must be a video file")
+        if media_type == "preview" and not (
+            mime_type.startswith(("image/", "video/")) or mime_type == "application/pdf"
+        ):
+            raise ValueError("Preview media must be an image, video, or PDF")
+
+        upload = BufferedInputFile(data, filename=filename)
+        storage_caption = f"Zemen product media · {product_id} · {media_type}"
+        if mime_type.startswith("image/"):
+            msg = await self.bot.send_photo(
+                chat_id=self.settings.telegram_storage_chat_id,
+                photo=upload,
+                caption=storage_caption,
+            )
+            if not msg.photo:
+                raise RuntimeError("Telegram did not return a photo file_id")
+            file_id = msg.photo[-1].file_id
+        elif mime_type.startswith("video/"):
+            msg = await self.bot.send_video(
+                chat_id=self.settings.telegram_storage_chat_id,
+                video=upload,
+                caption=storage_caption,
+            )
+            if msg.video is None:
+                raise RuntimeError("Telegram did not return a video file_id")
+            file_id = msg.video.file_id
+        else:
+            msg = await self.bot.send_document(
+                chat_id=self.settings.telegram_storage_chat_id,
+                document=upload,
+                caption=storage_caption,
+            )
+            if msg.document is None:
+                raise RuntimeError("Telegram did not return a document file_id")
+            file_id = msg.document.file_id
         return await self.add_media(product_id=product_id, admin_telegram_id=admin_telegram_id, data={
-            "media_type":media_type,"storage_type":"telegram_file_id","value":msg.document.file_id,
-            "language":language,"alt_text":alt_text,"sort_order":sort_order,"mime_type":content_type or msg.document.mime_type,
+            "media_type":media_type,"storage_type":"telegram_file_id","value":file_id,
+            "language":language,"alt_text":alt_text,"caption":caption,"sort_order":sort_order,"mime_type":mime_type,
             "file_name":filename,
         })
+
+    async def update_media(self, *, product_id: UUID, media_id: UUID, admin_telegram_id: int, data: dict[str, Any]) -> dict[str, Any]:
+        language = data.get("language")
+        if language not in (None, "am", "en"):
+            raise ValueError("Unsupported media language")
+        async with self.db.transaction() as conn:
+            before = await conn.fetchrow(
+                "SELECT * FROM product_media WHERE id=$1 AND product_id=$2 FOR UPDATE",
+                media_id,
+                product_id,
+            )
+            if before is None:
+                raise LookupError("Media not found")
+            if before["media_type"] == "cover" and before["language"] != language:
+                await conn.execute(
+                    """UPDATE product_media SET is_active=FALSE,updated_at=now()
+                       WHERE product_id=$1 AND media_type='cover'
+                         AND language IS NOT DISTINCT FROM $2 AND id<>$3 AND is_active=TRUE""",
+                    product_id,
+                    language,
+                    media_id,
+                )
+            row = await conn.fetchrow(
+                """UPDATE product_media
+                   SET language=$3,alt_text=$4,caption=$5,sort_order=$6,updated_at=now()
+                   WHERE id=$1 AND product_id=$2 RETURNING *""",
+                media_id,
+                product_id,
+                language,
+                data.get("alt_text"),
+                data.get("caption"),
+                int(data.get("sort_order") or 0),
+            )
+            admin_id = await self.repo.admin_id(conn, telegram_id=admin_telegram_id)
+            await self.repo.insert_audit(
+                conn,
+                admin_id=admin_id,
+                action="product.media.update",
+                entity_type="product_media",
+                entity_id=str(media_id),
+                before=jsonable_encoder(dict(before)),
+                after=jsonable_encoder(dict(row)),
+            )
+        item = dict(row)
+        item["public_url"] = self._media_url(row["id"], row["storage_type"], row["value"])
+        return item
 
     async def deactivate_media(self, *, product_id: UUID, media_id: UUID, admin_telegram_id: int) -> dict[str, Any]:
         async with self.db.transaction() as conn:

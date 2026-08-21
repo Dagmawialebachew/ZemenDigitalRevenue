@@ -375,6 +375,9 @@ class MiniAppService:
                     "type": item["media_type"],
                     "url": url,
                     "alt": item["alt_text"] or row["title"],
+                    "caption": item["caption"],
+                    "mime_type": item["mime_type"],
+                    "file_name": item["file_name"],
                 }
             )
 

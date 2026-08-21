@@ -15,7 +15,9 @@ function asText(value: unknown): string {
 export function ProductView({ product, language, onBuy, onPreview }: { product: ProductDetail; language: Language; onBuy: () => void; onPreview: () => void }) {
   const c = t(language)
   const [mediaIndex, setMediaIndex] = useState(0)
-  const media = product.media.filter(m => ['cover', 'preview', 'gallery'].includes(m.type))
+  const isPdf = (m: ProductDetail['media'][number]) => m.mime_type === 'application/pdf' || m.file_name?.toLowerCase().endsWith('.pdf')
+  const media = product.media.filter(m => ['cover', 'preview', 'gallery', 'video'].includes(m.type) && !isPdf(m))
+  const samplePdf = product.media.find(m => m.type === 'preview' && isPdf(m))
   const current = media[mediaIndex]
   const benefits = useMemo(() => product.benefits.map(asText).filter(Boolean), [product.benefits])
   const faqs = useMemo(() => product.faq.map(v => typeof v === 'object' && v ? v as Record<string, unknown> : { question: String(v) }), [product.faq])
@@ -23,7 +25,7 @@ export function ProductView({ product, language, onBuy, onPreview }: { product: 
   return <div className="product-detail view-stack">
     <section className="product-hero">
       <div className="detail-media" onClick={onPreview}>
-        {current ? <img src={current.url} alt={current.alt} /> : <div className="cover-placeholder detail-placeholder"><span>AI</span><b>ከዜሮ</b><i>ZEMEN DIGITAL</i></div>}
+        {current?.mime_type?.startsWith('video/') ? <video src={current.url} controls playsInline /> : current ? <img src={current.url} alt={current.alt} /> : <div className="cover-placeholder detail-placeholder"><span>AI</span><b>ከዜሮ</b><i>ZEMEN DIGITAL</i></div>}
       </div>
       {media.length > 1 && <div className="media-dots">{media.map((_, i) => <button aria-label={`Image ${i + 1}`} className={i === mediaIndex ? 'active' : ''} key={i} onClick={() => { setMediaIndex(i); onPreview() }} />)}</div>}
       <div className="detail-copy">
@@ -37,6 +39,7 @@ export function ProductView({ product, language, onBuy, onPreview }: { product: 
           {product.has_offer && <em>{c.offer}</em>}
         </div>
         <button className="primary-button buy-button" disabled={product.is_owned} onClick={onBuy}>{product.is_owned ? c.owned : c.getIt}</button>
+        {samplePdf&&<a className="sample-button" href={samplePdf.url} target="_blank" rel="noreferrer" onClick={onPreview}><span>PDF</span><div><b>{language==='am'?'ነፃ ናሙናውን ይመልከቱ':'Open the free sample'}</b><small>{samplePdf.caption||samplePdf.file_name||'Preview before you buy'}</small></div></a>}
       </div>
     </section>
 

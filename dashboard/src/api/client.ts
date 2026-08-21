@@ -51,6 +51,7 @@ export const api = {
   saveProductTranslation: (id:string,language:'am'|'en',payload:Record<string,unknown>) => request<ProductTranslation>(`/api/control/products/${id}/translations/${language}`,{method:'PUT',body:JSON.stringify(payload)}),
   addProductMedia: (id:string,payload:Record<string,unknown>) => request<ProductMedia>(`/api/control/products/${id}/media`,{method:'POST',body:JSON.stringify(payload)}),
   uploadProductMedia: (id:string,form:FormData) => requestForm<ProductMedia>(`/api/control/products/${id}/media/upload`,form),
+  updateProductMedia: (id:string,mediaId:string,payload:Record<string,unknown>) => request<ProductMedia>(`/api/control/products/${id}/media/${mediaId}`,{method:'PATCH',body:JSON.stringify(payload)}),
   removeProductMedia: (id:string,mediaId:string) => request<ProductMedia>(`/api/control/products/${id}/media/${mediaId}`,{method:'DELETE'}),
   addProductFile: (id:string,payload:Record<string,unknown>) => request<ProductFile>(`/api/control/products/${id}/files`,{method:'POST',body:JSON.stringify(payload)}),
   uploadProductFile: (id:string,form:FormData) => requestForm<ProductFile>(`/api/control/products/${id}/files/upload`,form),

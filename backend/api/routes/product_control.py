@@ -65,6 +65,13 @@ class MediaCreate(BaseModel):
     file_name: str | None = Field(default=None, max_length=500)
 
 
+class MediaUpdate(BaseModel):
+    language: Literal["am", "en"] | None = None
+    alt_text: str | None = Field(default=None, max_length=500)
+    caption: str | None = Field(default=None, max_length=2000)
+    sort_order: int = 0
+
+
 class DeliveryFileCreate(BaseModel):
     version: str = Field(min_length=1, max_length=100)
     telegram_file_id: str | None = Field(default=None, max_length=1000)
@@ -156,12 +163,20 @@ async def add_media(product_id: UUID, payload: MediaCreate, request: Request, pr
 async def upload_media(
     product_id: UUID, request: Request,
     file: UploadFile = File(...),
-    media_type: str = Form("gallery"), language: str | None = Form(None), alt_text: str | None = Form(None), sort_order: int = Form(0),
+    media_type: str = Form("gallery"), language: str | None = Form(None), alt_text: str | None = Form(None), caption: str | None = Form(None), sort_order: int = Form(0),
     principal: ControlPrincipal = Depends(require_control_session), settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     data = await file.read((settings.product_upload_max_mb * 1024 * 1024) + 1)
     try:
-        return await _service(request, settings).upload_media(product_id=product_id, admin_telegram_id=principal.telegram_id, filename=file.filename or "media.bin", content_type=file.content_type, data=data, media_type=media_type, language=language or None, alt_text=alt_text, sort_order=sort_order)
+        return await _service(request, settings).upload_media(product_id=product_id, admin_telegram_id=principal.telegram_id, filename=file.filename or "media.bin", content_type=file.content_type, data=data, media_type=media_type, language=language or None, alt_text=alt_text, caption=caption, sort_order=sort_order)
+    except Exception as exc:
+        raise _error(exc) from None
+
+
+@router.patch("/{product_id}/media/{media_id}")
+async def update_media(product_id: UUID, media_id: UUID, payload: MediaUpdate, request: Request, principal: ControlPrincipal = Depends(require_control_session), settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    try:
+        return await _service(request, settings).update_media(product_id=product_id, media_id=media_id, admin_telegram_id=principal.telegram_id, data=payload.model_dump())
     except Exception as exc:
         raise _error(exc) from None
 

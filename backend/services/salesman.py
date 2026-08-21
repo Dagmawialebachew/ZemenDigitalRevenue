@@ -16,6 +16,20 @@ from backend.repositories.users import UserRepository
 from backend.repositories.payments import PaymentRepository
 
 @dataclass(frozen=True, slots=True)
+class SalesMediaAsset:
+    id: Any
+    media_type: str
+    storage_type: str
+    value: str
+    language: str | None
+    alt_text: str | None
+    caption: str | None
+    sort_order: int
+    mime_type: str | None
+    file_name: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class SalesPresentation:
     user_id: Any
     language: str
@@ -28,6 +42,7 @@ class SalesPresentation:
     profile: SalesProfile
     angle: str | None
     override_hook: dict[str, object] | None = None
+    media: tuple[SalesMediaAsset, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +100,24 @@ class SalesmanService:
             main_obstacle=record["main_obstacle"],
         )
 
+    @staticmethod
+    def _media(rows: list[Any]) -> tuple[SalesMediaAsset, ...]:
+        return tuple(
+            SalesMediaAsset(
+                id=row["id"],
+                media_type=str(row["media_type"]),
+                storage_type=str(row["storage_type"]),
+                value=str(row["value"]),
+                language=row["language"],
+                alt_text=row["alt_text"],
+                caption=row["caption"],
+                sort_order=int(row["sort_order"] or 0),
+                mime_type=row["mime_type"],
+                file_name=row["file_name"],
+            )
+            for row in rows
+        )
+
     async def presentation(self, *, user_id: Any) -> SalesPresentation:
         async with self.db.transaction() as conn:
             user = await self.users.get_by_id(conn, user_id=user_id)
@@ -97,6 +130,7 @@ class SalesmanService:
             product_card = None
             source = None
             block = None
+            media: tuple[SalesMediaAsset, ...] = ()
             if session and session["focus_tracking_link_id"]:
                 source = await self.tracking.get_by_id(conn, session["focus_tracking_link_id"])
             angle = source["angle"] if source else None
@@ -107,6 +141,13 @@ class SalesmanService:
                     language=language,
                 )
                 if product_card:
+                    media = self._media(
+                        await self.products.list_active_media(
+                            conn,
+                            product_id=session["focus_product_id"],
+                            language=language,
+                        )
+                    )
                     block_record = await self.content.get_best_block(
                         conn,
                         product_id=session["focus_product_id"],
@@ -150,6 +191,7 @@ class SalesmanService:
                 profile=profile,
                 angle=angle,
                 override_hook=block,
+                media=media,
             )
 
     async def detail(self, *, user_id: Any, kind: str = "preview") -> SalesDetail:
@@ -165,6 +207,7 @@ class SalesmanService:
             product_card = None
             benefits: tuple[str, ...] = ()
             override = None
+            media: tuple[SalesMediaAsset, ...] = ()
             angle = None
             if session and session["focus_tracking_link_id"]:
                 source = await self.tracking.get_by_id(conn, session["focus_tracking_link_id"])
@@ -175,6 +218,13 @@ class SalesmanService:
                 )
                 translation = await self.products.get_translation(
                     conn, product_id=session["focus_product_id"], language=language
+                )
+                media = self._media(
+                    await self.products.list_active_media(
+                        conn,
+                        product_id=session["focus_product_id"],
+                        language=language,
+                    )
                 )
                 if translation and translation["benefits"]:
                     raw = translation["benefits"]
@@ -218,8 +268,36 @@ class SalesmanService:
                 regular_price_br=product_card["regular_price_br"] if product_card else None,
                 profile=profile,
                 angle=angle,
+                media=media,
             )
             return SalesDetail(presentation=p, benefits=benefits, override_content=override)
+
+    async def record_media_action(self, *, user_id: Any, action: str) -> None:
+        signals = {
+            "gallery": "GALLERY_OPENED",
+            "sample": "SAMPLE_PDF_OPENED",
+        }
+        signal_key = signals.get(action)
+        if signal_key is None:
+            raise ValueError("Unsupported sales media action")
+        async with self.db.transaction() as conn:
+            session = await self.sessions.get(conn, user_id=user_id)
+            if not session or not session["focus_product_id"]:
+                return
+            await self.journeys.record_unique_signal(
+                conn,
+                user_id=user_id,
+                product_id=session["focus_product_id"],
+                signal_key=signal_key,
+            )
+            await self.events.append(
+                conn,
+                event_type=signal_key,
+                user_id=user_id,
+                product_id=session["focus_product_id"],
+                tracking_link_id=session["focus_tracking_link_id"],
+                payload={"surface": "bot"},
+            )
 
     async def record_buy_click(self, *, user_id: Any) -> SalesPresentation:
         presentation = await self.presentation(user_id=user_id)

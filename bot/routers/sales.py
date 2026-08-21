@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from html import escape
-
 from aiogram import F, Router
 from aiogram.types import (
     CallbackQuery,
@@ -18,6 +16,7 @@ from backend.repositories.users import UserRepository
 from backend.services.salesman import SalesmanService
 from bot.keyboards.sales import after_detail_keyboard, sales_keyboard
 from bot.services.current_user import load_current_entry_context
+from bot.services.product_media import send_sales_gallery, send_sales_hero, send_sample_pdf
 from bot.services.sales_copy import detail_text, pitch_text
 
 router = Router(name="sales")
@@ -94,6 +93,15 @@ async def send_product_picker(
             ]
         )
 
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="✨ Help me choose" if language == "en" else "✨ እንድመርጥ እርዱኝ",
+                callback_data="sales:continue",
+            )
+        ]
+    )
+
     await message.answer(
         text,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
@@ -135,13 +143,22 @@ async def send_sales_pitch(
         else None
     )
 
-    await message.answer(
-        pitch_text(presentation),
-        reply_markup=sales_keyboard(
-            language=presentation.language,
-            price_br=price,
-        ),
+    text = pitch_text(presentation)
+    markup = sales_keyboard(
+        language=presentation.language,
+        price_br=price,
+        mini_app_url=settings.mini_app_url,
+        profile_complete=presentation.profile.complete,
     )
+    sent = await send_sales_hero(
+        message=message,
+        presentation=presentation,
+        settings=settings,
+        text=text,
+        reply_markup=markup,
+    )
+    if not sent:
+        await message.answer(text, reply_markup=markup)
 
 
 @router.callback_query(F.data.startswith("sales:product:"))
@@ -227,7 +244,7 @@ async def continue_sales(
     )
 
 
-@router.callback_query(F.data.in_({"sales:preview", "sales:question"}))
+@router.callback_query(F.data.in_({"sales:preview", "sales:sample", "sales:question"}))
 async def sales_detail(
     callback: CallbackQuery,
     db: Database,
@@ -243,11 +260,8 @@ async def sales_detail(
     if callback.message is None or current is None:
         return
 
-    kind = (
-        "preview"
-        if callback.data == "sales:preview"
-        else "objection"
-    )
+    action = callback.data.removeprefix("sales:")
+    kind = "objection" if action == "question" else "preview"
     
     service = SalesmanService(db)
 
@@ -260,7 +274,7 @@ async def sales_detail(
         )
         return
 
-    detail = await SalesmanService(db).detail(
+    detail = await service.detail(
         user_id=current.user_id,
         kind=kind,
     )
@@ -273,13 +287,38 @@ async def sales_detail(
         else None
     )
 
-    await callback.message.answer(
-        detail_text(detail, kind=kind),
-        reply_markup=after_detail_keyboard(
-            language=presentation.language,
-            price_br=price,
-        ),
+    markup = after_detail_keyboard(
+        language=presentation.language,
+        price_br=price,
+        mini_app_url=settings.mini_app_url,
+        show_sample=action != "sample",
     )
+
+    if action == "preview":
+        await service.record_media_action(user_id=current.user_id, action="gallery")
+        await send_sales_gallery(
+            message=callback.message,
+            presentation=presentation,
+            settings=settings,
+        )
+    elif action == "sample":
+        await service.record_media_action(user_id=current.user_id, action="sample")
+        if await send_sample_pdf(
+            message=callback.message,
+            presentation=presentation,
+            settings=settings,
+            reply_markup=markup,
+        ):
+            return
+        unavailable = (
+            "📄 The free PDF sample is being prepared. You can still review what is inside or ask us a question."
+            if presentation.language == "en"
+            else "📄 ነፃው PDF ናሙና በዝግጅት ላይ ነው። እስከዚያ ድረስ የምርቱን ውስጥ ማየት ወይም ጥያቄ መጠየቅ ይችላሉ።"
+        )
+        await callback.message.answer(unavailable, reply_markup=markup)
+        return
+
+    await callback.message.answer(detail_text(detail, kind=kind), reply_markup=markup)
 
 
 @router.callback_query(F.data == "sales:buy")

@@ -29,6 +29,9 @@ export interface ProductMedia {
   type: string
   url: string
   alt: string
+  caption?: string | null
+  mime_type?: string | null
+  file_name?: string | null
 }
 
 export interface ProductReview {

@@ -157,15 +157,27 @@ class StorefrontRepository:
         return list(
             await conn.fetch(
                 """
-                SELECT id, media_type, storage_type, value, alt_text, sort_order
-                FROM product_media
-                WHERE product_id = $1
-                  AND is_active = TRUE
-                  AND media_type IN ('cover', 'gallery', 'preview', 'thumbnail', 'video')
-                  AND (language = $2 OR language IS NULL)
+                SELECT pm.id, pm.media_type, pm.storage_type, pm.value, pm.alt_text,
+                       pm.caption, pm.sort_order, pm.mime_type, pm.file_name
+                FROM product_media pm
+                JOIN products p ON p.id = pm.product_id
+                WHERE pm.product_id = $1
+                  AND pm.is_active = TRUE
+                  AND pm.media_type IN ('cover', 'gallery', 'preview', 'thumbnail', 'video')
+                  AND (
+                    pm.language = $2 OR pm.language IS NULL OR (
+                      pm.language = p.default_language AND NOT EXISTS (
+                        SELECT 1 FROM product_media preferred
+                        WHERE preferred.product_id = pm.product_id
+                          AND preferred.media_type = pm.media_type
+                          AND preferred.is_active = TRUE
+                          AND (preferred.language = $2 OR preferred.language IS NULL)
+                      )
+                    )
+                  )
                 ORDER BY
-                    CASE WHEN language = $2 THEN 0 ELSE 1 END,
-                    CASE media_type
+                    CASE WHEN pm.language = $2 THEN 0 WHEN pm.language IS NULL THEN 1 ELSE 2 END,
+                    CASE pm.media_type
                         WHEN 'cover' THEN 0
                         WHEN 'thumbnail' THEN 1
                         WHEN 'preview' THEN 2
@@ -173,8 +185,8 @@ class StorefrontRepository:
                         WHEN 'video' THEN 4
                         ELSE 5
                     END,
-                    sort_order ASC,
-                    created_at ASC
+                    pm.sort_order ASC,
+                    pm.created_at ASC
                 """,
                 product_id,
                 language,

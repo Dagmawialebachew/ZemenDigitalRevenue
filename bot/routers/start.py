@@ -77,9 +77,14 @@ async def start(
         return
 
     if not entry.profile_completed:
-        from bot.routers.onboarding import send_onboarding_step
+        from bot.routers.sales import send_sales_pitch
 
-        await send_onboarding_step(message=message, db=db, user_id=entry.user_id)
+        await send_sales_pitch(
+            message=message,
+            db=db,
+            settings=settings,
+            user_id=entry.user_id,
+        )
         return
 
     copy = returning_prompt(entry)

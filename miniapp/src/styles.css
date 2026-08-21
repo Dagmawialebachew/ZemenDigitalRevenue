@@ -54,7 +54,8 @@ main { padding:18px 16px 20px; }
 .product-card--hero { display:grid; grid-template-columns:42% 58%; min-height:220px; border-color:rgba(139,223,49,.2); background:linear-gradient(135deg,rgba(139,223,49,.09),rgba(255,255,255,.025)); }
 .product-cover { position:relative; aspect-ratio:.78; overflow:hidden; background:#0b140e; }
 .product-card--hero .product-cover { aspect-ratio:auto; min-height:220px; }
-.product-cover img { width:100%; height:100%; object-fit:cover; }
+.product-cover { display:grid; place-items:center; }
+.product-cover img { width:100%; height:100%; object-fit:contain; background:#050805; }
 .cover-placeholder { width:100%; height:100%; min-height:170px; display:flex; flex-direction:column; justify-content:flex-end; padding:18px; background:radial-gradient(circle at 70% 25%,rgba(139,223,49,.28),transparent 26%),linear-gradient(150deg,#020302 0%,#0a1b10 65%,#173620 100%); }
 .cover-placeholder span { font-size:44px; line-height:.88; font-weight:900; letter-spacing:-.07em; }
 .cover-placeholder b { color:var(--z-green); font-size:26px; }
@@ -77,8 +78,8 @@ main { padding:18px 16px 20px; }
 .bottom-nav button svg { width:20px; height:20px; }
 .bottom-nav button.active { color:var(--z-green); }
 .product-hero { border-radius:28px; overflow:hidden; border:1px solid var(--z-border); background:rgba(255,255,255,.025); }
-.detail-media { height:min(62vh,520px); background:#07100a; overflow:hidden; }
-.detail-media img { width:100%; height:100%; object-fit:cover; }
+.detail-media { height:min(68vh,620px); background:radial-gradient(circle at 50% 40%,#102218,#030503 75%); overflow:hidden; display:grid; place-items:center; }
+.detail-media img,.detail-media video { width:100%; height:100%; object-fit:contain; }
 .detail-placeholder { min-height:100%; justify-content:center; align-items:flex-start; }
 .media-dots { display:flex; gap:6px; justify-content:center; padding:10px; }
 .media-dots button { width:6px; height:6px; border-radius:50%; border:0; background:#425046; padding:0; }
@@ -98,6 +99,11 @@ main { padding:18px 16px 20px; }
 .detail-price em { font-style:normal; color:#07100a; background:var(--z-green); border-radius:999px; padding:7px 9px; font-size:9px; font-weight:850; }
 .primary-button { width:100%; border:0; border-radius:16px; min-height:52px; background:var(--z-green); color:#07100a; font-weight:850; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 12px 38px rgba(139,223,49,.12); }
 .primary-button:disabled { opacity:.48; }
+.sample-button { margin-top:10px; min-height:60px; padding:10px 12px; display:flex; align-items:center; gap:11px; border:1px solid rgba(139,223,49,.18); border-radius:15px; background:rgba(139,223,49,.055); color:var(--z-ivory); text-decoration:none; }
+.sample-button>span { width:39px; height:39px; flex:0 0 auto; display:grid; place-items:center; border-radius:11px; background:var(--z-green); color:#07100a; font-size:10px; font-weight:900; }
+.sample-button>div { min-width:0; display:flex; flex-direction:column; gap:4px; }
+.sample-button b { font-size:12px; }
+.sample-button small { color:var(--z-muted); font-size:9px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .content-card,.earn-hero,.profile-card { border:1px solid var(--z-border); background:rgba(255,255,255,.025); border-radius:24px; padding:20px; }
 .content-card h2 { margin:0 0 16px; font-size:20px; }
 .benefit-list { display:flex; flex-direction:column; gap:12px; }
@@ -116,7 +122,7 @@ main { padding:18px 16px 20px; }
 .library-list { display:grid; gap:12px; }
 .library-card { display:grid; grid-template-columns:90px 1fr; gap:14px; padding:12px; border:1px solid var(--z-border); border-radius:20px; background:rgba(255,255,255,.025); }
 .library-thumb { min-height:115px; border-radius:14px; background:var(--z-forest); overflow:hidden; display:grid; place-items:center; color:var(--z-green); }
-.library-thumb img { width:100%; height:100%; object-fit:cover; }
+.library-thumb img { width:100%; height:100%; object-fit:contain; background:#050805; }
 .library-info { display:flex; flex-direction:column; justify-content:space-between; min-width:0; }
 .library-info h3 { margin:0; font-size:16px; }
 .library-info small { color:#778078; text-transform:capitalize; }

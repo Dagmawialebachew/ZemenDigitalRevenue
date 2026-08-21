@@ -52,11 +52,12 @@ async def choose_language(
             await callback.message.edit_reply_markup(reply_markup=None)
         except Exception:
             pass
-        from bot.routers.onboarding import send_onboarding_step
+        from bot.routers.sales import send_sales_pitch
 
-        await send_onboarding_step(
+        await send_sales_pitch(
             message=callback.message,
             db=db,
+            settings=settings,
             user_id=current.user_id,
         )
 

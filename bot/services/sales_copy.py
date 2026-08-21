@@ -80,6 +80,42 @@ def pitch_text(p: SalesPresentation) -> str:
     title = escape(p.product_title)
     price = f"{p.regular_price_br:g}" if p.regular_price_br is not None else None
 
+    if not p.profile.complete:
+        if p.language == "en":
+            lines = [
+                f"👋 <b>{escape(p.first_name)}, see the product before answering anything.</b>",
+                "",
+                f"📦 <b>{title}</b>",
+            ]
+            if desc:
+                lines.append(desc)
+            lines.extend(
+                [
+                    "",
+                    "Open the real preview, inspect the sample, and decide from what you actually receive.",
+                ]
+            )
+            if price:
+                lines.extend(["", f"💰 <b>{price} Br</b>"])
+            return "\n".join(lines)
+
+        lines = [
+            f"👋 <b>{escape(p.first_name)}፣ ምንም ነገር ከመመለስዎ በፊት ምርቱን ይመልከቱ።</b>",
+            "",
+            f"📦 <b>{title}</b>",
+        ]
+        if desc:
+            lines.append(desc)
+        lines.extend(
+            [
+                "",
+                "እውነተኛውን preview ይክፈቱ፣ ነፃውን ናሙና ይመልከቱ፣ ከዚያም በሚያገኙት ነገር ላይ ተመስርተው ይወስኑ።",
+            ]
+        )
+        if price:
+            lines.extend(["", f"💰 <b>{price} ብር</b>"])
+        return "\n".join(lines)
+
     if p.language == "en":
         lines = [
             f"🎯 <b>{escape(p.first_name)}, now this is much clearer.</b>",

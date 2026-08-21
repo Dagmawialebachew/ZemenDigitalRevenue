@@ -80,6 +80,16 @@ def readiness_report(*, product: Any, translations: list[Any], media: list[Any],
         for row in translations
     )
     has_cover = any(row["media_type"] == "cover" and bool(row["is_active"]) for row in media)
+    has_gallery = any(row["media_type"] == "gallery" and bool(row["is_active"]) for row in media)
+    has_sample_pdf = any(
+        row["media_type"] == "preview"
+        and bool(row["is_active"])
+        and (
+            str(row.get("mime_type") or "").lower() == "application/pdf"
+            or str(row.get("file_name") or "").lower().endswith(".pdf")
+        )
+        for row in media
+    )
     active_files = [row for row in files if bool(row["is_active"])]
     delivery_required = str(product["product_type"]) in {"digital_file", "digital_bundle"}
     has_delivery = bool(active_files)
@@ -92,6 +102,10 @@ def readiness_report(*, product: Any, translations: list[Any], media: list[Any],
         blockers.append("Add an active delivery file before publishing this digital product.")
     if not has_cover:
         warnings.append("Add a cover image for a stronger storefront presentation.")
+    if not has_gallery:
+        warnings.append("Add gallery images so buyers can inspect what is inside.")
+    if not has_sample_pdf:
+        warnings.append("Add a separate free PDF sample to strengthen buyer trust.")
     if not product["category"]:
         warnings.append("Category is empty.")
     if product["discounts_enabled"] and product["recovery_price_br"] is None:
@@ -104,6 +118,8 @@ def readiness_report(*, product: Any, translations: list[Any], media: list[Any],
         "checks": {
             "default_translation": has_default_translation,
             "cover": has_cover,
+            "gallery": has_gallery,
+            "sample_pdf": has_sample_pdf,
             "delivery_file": has_delivery,
             "delivery_required": delivery_required,
             "commission_only_full_price": bool(product["commission_only_full_price"]),

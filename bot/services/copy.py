@@ -16,10 +16,6 @@ def language_prompt(entry: CustomerEntryContext) -> EntryCopy:
         f"\n\n📦 **{entry.focus_product_title}** ለማየት ነው የመጡት — ተረድቻለሁ።"
         if entry.focus_product_title else ""
     )
-    product_line_en = (
-        f"\n\n📦 You came for **{entry.focus_product_title}** — got it."
-        if entry.focus_product_title else ""
-    )
     return EntryCopy(
         text=(
             "👋 እንኳን ወደ Zemen Digital በደህና መጡ!\n\n"
@@ -59,13 +55,13 @@ def after_language(entry: CustomerEntryContext, *, language: str) -> EntryCopy:
                 f"✅ Perfect, {entry.first_name}. We'll continue in English."
                 + product.replace("**", "")
                 + angle_hint
-                + "\n\nI’ll ask a few quick questions so I can show you the parts that actually fit you — no long form. 👀"
+                + "\n\nI’ll show you the product first. If you want, a few quick questions can personalize my recommendation. 👀"
             ),
             rich_markdown=(
                 f"## ✅ Perfect, {entry.first_name}\n\nWe'll continue in **English**."
                 + product
                 + angle_hint
-                + "\n\nI’ll ask a few quick questions so I can show you what actually fits you — **no long form**. 👀"
+                + "\n\nI’ll show you the product first. A few optional questions can then **personalize my recommendation**. 👀"
             ),
         )
     product = f"\n\n📦 **{title}** ለእርስዎ ተዘጋጅቷል።" if title else ""
@@ -75,13 +71,13 @@ def after_language(entry: CustomerEntryContext, *, language: str) -> EntryCopy:
             f"✅ ጥሩ {entry.first_name}፣ በአማርኛ እንቀጥላለን።"
             + product.replace("**", "")
             + angle_hint
-            + "\n\nረጅም form አይደለም 😄 ለእርስዎ ትክክለኛውን ነገር እንዳሳይዎ ጥቂት ፈጣን ጥያቄዎች ብቻ እጠይቃለሁ።"
+            + "\n\nመጀመሪያ ምርቱን በግልጽ አሳይዎታለሁ። ከፈለጉ ጥቂት ፈጣን ጥያቄዎች ምክሩን ለእርስዎ ያስተካክላሉ።"
         ),
         rich_markdown=(
             f"## ✅ ጥሩ {entry.first_name}\n\nበ**አማርኛ** እንቀጥላለን።"
             + product
             + angle_hint
-            + "\n\nረጅም form አይደለም 😄 ለእርስዎ ትክክለኛውን ነገር እንዳሳይዎ **ጥቂት ፈጣን ጥያቄዎች** ብቻ እጠይቃለሁ።"
+            + "\n\nመጀመሪያ **ምርቱን በግልጽ አሳይዎታለሁ**። ከፈለጉ ጥቂት ፈጣን ጥያቄዎች ምክሩን ለእርስዎ ያስተካክላሉ።"
         ),
     )
 
