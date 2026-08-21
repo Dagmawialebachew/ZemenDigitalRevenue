@@ -1,4 +1,4 @@
-import type { BootstrapResponse, CheckoutResponse, Language, LibraryItem, ProductDetail, ReferralCenter } from './types'
+import type { BootstrapResponse, CheckoutResponse, Language, LibraryItem, PolicyDocument, PolicyKind, ProductDetail, ReferralCenter } from './types'
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api/miniapp').replace(/\/$/, '')
 
@@ -42,6 +42,10 @@ class ApiClient {
 
   product(slug: string, language: Language) {
     return this.request<ProductDetail>(`/products/${encodeURIComponent(slug)}?language=${language}`)
+  }
+
+  policy(kind: PolicyKind, language: Language) {
+    return this.request<PolicyDocument>(`/policies/${kind}?language=${language}`)
   }
 
   checkout(slug: string) {

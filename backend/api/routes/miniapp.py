@@ -100,6 +100,22 @@ async def products(
     return {"products": data["products"]}
 
 
+@router.get("/policies/{kind}")
+async def policy(
+    kind: str,
+    request: Request,
+    _: Any = Depends(current_user),
+    settings: Settings = Depends(get_settings),
+    language: str = Query(default="am", pattern=r"^(am|en)$"),
+) -> dict[str, object]:
+    try:
+        return MiniAppService(request.app.state.db, settings).policy(
+            kind=kind, language=language
+        )
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="policy not found") from None
+
+
 @router.get("/products/{slug}")
 async def product_detail(
     slug: str,

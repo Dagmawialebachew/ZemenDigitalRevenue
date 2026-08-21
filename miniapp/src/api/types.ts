@@ -1,4 +1,12 @@
 export type Language = 'am' | 'en'
+export type PolicyKind = 'terms' | 'refund' | 'privacy' | 'delivery'
+
+export interface PolicyDocument {
+  kind: PolicyKind
+  version: string
+  title: string
+  sections: Array<{ heading: string; body: string }>
+}
 
 export interface MiniAppUser {
   first_name: string
@@ -40,6 +48,20 @@ export interface ProductReview {
   first_name: string
 }
 
+export interface CheckoutStatus {
+  order_public_id: string
+  order_status: string
+  total_due_br: string
+  pricing_type: 'regular' | 'recovery' | 'manual_discount'
+  payment_public_id?: string | null
+  payment_status?: string | null
+  payment_method?: string | null
+  rejection_reason?: string | null
+  proof_submitted_at?: string | null
+  expires_at?: string | null
+  chat_url: string
+}
+
 export interface ProductDetail extends ProductSummary {
   description: string
   category?: string | null
@@ -49,6 +71,7 @@ export interface ProductDetail extends ProductSummary {
   avg_rating?: string | null
   media: ProductMedia[]
   reviews: ProductReview[]
+  active_checkout?: CheckoutStatus | null
 }
 
 export interface BootstrapResponse {
@@ -83,12 +106,8 @@ export interface ReferralCenter {
   paid_br: string
 }
 
-export interface CheckoutResponse {
-  order_public_id: string
+export interface CheckoutResponse extends CheckoutStatus {
   status: string
-  total_due_br: string
-  pricing_type: 'regular' | 'recovery' | 'manual_discount'
   discount_br: string
   commissionable: boolean
-  chat_url: string
 }

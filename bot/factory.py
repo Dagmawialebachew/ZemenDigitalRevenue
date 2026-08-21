@@ -8,6 +8,7 @@ from backend.core.config import Settings
 from backend.db.pool import Database
 from bot.routers.fallback import router as fallback_router
 from bot.routers.language import router as language_router
+from bot.routers.legal import router as legal_router
 from bot.routers.menu import router as menu_router
 from bot.routers.onboarding import router as onboarding_router
 from bot.routers.payments import router as payments_router
@@ -33,6 +34,7 @@ def create_dispatcher(*, db: Database, settings: Settings) -> Dispatcher:
         start_router,
         language_router,
         onboarding_router,
+        legal_router,
         sales_router,
         payments_router,
         support_router,

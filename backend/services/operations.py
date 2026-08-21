@@ -177,7 +177,14 @@ class OperationsService:
                 ),
             )
 
-    async def open_support(self, *, user_id: UUID, product_id: UUID | None = None, order_id: UUID | None = None) -> dict[str, Any]:
+    async def open_support(
+        self,
+        *,
+        user_id: UUID,
+        product_id: UUID | None = None,
+        order_id: UUID | None = None,
+        subject: str | None = None,
+    ) -> dict[str, Any]:
         async with self.db.transaction() as conn:
             case = await self.repo.create_or_get_support_case(
                 conn,
@@ -185,6 +192,7 @@ class OperationsService:
                 user_id=user_id,
                 product_id=product_id,
                 order_id=order_id,
+                subject=subject,
             )
             await conn.execute(
                 """
@@ -199,7 +207,7 @@ class OperationsService:
                 user_id=user_id,
                 product_id=product_id,
                 order_id=order_id,
-                payload={"case_public_id": case["public_id"]},
+                payload={"case_public_id": case["public_id"], "subject": subject},
             )
         return dict(case)
 

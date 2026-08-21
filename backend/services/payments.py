@@ -11,6 +11,7 @@ from uuid import UUID
 from backend.core.config import Settings
 from backend.db.pool import Database
 from backend.domain.enums import PaymentRejectReason
+from backend.domain.policies import POLICY_VERSION
 from backend.domain.payments import (
     choose_checkout_price,
     new_order_public_id,
@@ -52,6 +53,8 @@ class PaymentResume:
     payment_public_id: str | None
     payment_status: str | None
     payment_method: str | None
+    rejection_reason: str | None
+    policies_accepted: bool
     language: str
 
 
@@ -268,6 +271,19 @@ class PaymentService:
                 if order["status"] in {"paid", "cancelled", "expired", "refunded"}
                 else await self.repo.find_live_payment(conn, order_id=order["id"])
             )
+            policies_accepted = bool(
+                await conn.fetchval(
+                    """
+                    SELECT EXISTS(
+                        SELECT 1 FROM legal_acceptances
+                        WHERE user_id=$1 AND order_id=$2 AND policy_version=$3
+                    )
+                    """,
+                    user_id,
+                    order["id"],
+                    POLICY_VERSION,
+                )
+            )
             await conn.execute(
                 """
                 UPDATE conversation_sessions
@@ -299,8 +315,59 @@ class PaymentService:
                 payment_public_id=payment["public_id"] if payment else None,
                 payment_status=payment["status"] if payment else None,
                 payment_method=payment["payment_method"] if payment else None,
+                rejection_reason=payment["rejection_reason_text"] if payment else None,
+                policies_accepted=policies_accepted,
                 language=language,
             )
+
+    async def accept_purchase_policies(
+        self,
+        *,
+        user_id: Any,
+        order_public_id: str,
+        language: str,
+        surface: str = "telegram",
+    ) -> PaymentResume:
+        language = "en" if language == "en" else "am"
+        if surface not in {"telegram", "miniapp"}:
+            raise ValueError("invalid policy acceptance surface")
+        async with self.db.transaction() as conn:
+            order = await self.repo.order_by_public_id_for_user(
+                conn, public_id=order_public_id, user_id=user_id, lock=True
+            )
+            if order is None:
+                raise LookupError("order not found")
+            if order["status"] in {"paid", "cancelled", "expired", "refunded"}:
+                raise ValueError(f"order is {order['status']}")
+            acceptance_id = await conn.fetchval(
+                """
+                INSERT INTO legal_acceptances(
+                    user_id,order_id,policy_version,language,surface
+                ) VALUES ($1,$2,$3,$4,$5)
+                ON CONFLICT (user_id,order_id,policy_version) DO NOTHING
+                RETURNING id
+                """,
+                user_id,
+                order["id"],
+                POLICY_VERSION,
+                language,
+                surface,
+            )
+            item = await self.repo.order_product(conn, order_id=order["id"], language=language)
+            if acceptance_id is not None:
+                await self.events.append(
+                    conn,
+                    event_type="PURCHASE_TERMS_ACCEPTED",
+                    user_id=user_id,
+                    product_id=item["product_id"] if item else None,
+                    order_id=order["id"],
+                    payload={
+                        "policy_version": POLICY_VERSION,
+                        "language": language,
+                        "surface": surface,
+                    },
+                )
+        return await self.resume_order_for_user(user_id=user_id, order_public_id=order_public_id)
 
     async def select_method(
         self,
@@ -321,6 +388,19 @@ class PaymentService:
             if order["expires_at"] and order["expires_at"] <= datetime.now(UTC):
                 await conn.execute("UPDATE orders SET status='expired', updated_at=now() WHERE id=$1", order["id"])
                 raise ValueError("order expired")
+            accepted = await conn.fetchval(
+                """
+                SELECT EXISTS(
+                    SELECT 1 FROM legal_acceptances
+                    WHERE user_id=$1 AND order_id=$2 AND policy_version=$3
+                )
+                """,
+                user_id,
+                order["id"],
+                POLICY_VERSION,
+            )
+            if not accepted:
+                raise ValueError("accept the Terms and Refund Policy before choosing payment")
 
             payment = await self.repo.find_live_payment(conn, order_id=order["id"], lock=True)
             if payment is None:
@@ -753,7 +833,13 @@ class PaymentService:
                     job_type="telegram.user.notify",
                     queue="telegram",
                     job_key=f"user:payment_approved:{payment['id']}",
-                    payload={"telegram_id": int(context["telegram_id"]), "text": approved_text},
+                    payload={
+                        "telegram_id": int(context["telegram_id"]),
+                        "text": approved_text,
+                        "payment_action": "owned",
+                        "order_public_id": order["public_id"],
+                        "language": language,
+                    },
                     max_attempts=8,
                 ),
             )
@@ -892,7 +978,13 @@ class PaymentService:
                     job_type="telegram.user.notify",
                     queue="telegram",
                     job_key=f"user:payment_rejected:{payment['id']}:{payment['latest_proof_id']}",
-                    payload={"telegram_id": int(context["telegram_id"]), "text": user_text},
+                    payload={
+                        "telegram_id": int(context["telegram_id"]),
+                        "text": user_text,
+                        "payment_action": "rejected",
+                        "order_public_id": context["order_public_id"],
+                        "language": language,
+                    },
                     max_attempts=8,
                 ),
             )

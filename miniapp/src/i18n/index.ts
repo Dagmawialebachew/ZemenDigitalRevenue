@@ -16,7 +16,13 @@ const copy = {
     paymentNext: 'Your payment options are ready in the Zemen bot.', openPayment: 'Open payment in Zemen bot',
     paymentReady: 'Payment ready for Telegram', paymentGuide: 'Tap below and check the newest message in your Zemen bot chat. The Mini App will minimize when Telegram opens — that is normal.',
     paymentStepOne: 'Open the Zemen bot', paymentStepTwo: 'Choose CBE or Telebirr in the newest message', preparingPayment: 'Preparing payment…',
+    paymentAwaitingReceipt: 'Waiting for your receipt', paymentUnderReview: 'Receipt received · under review', paymentNeedsProof: 'A new screenshot is needed',
+    paymentAwaitingGuide: 'Continue in the bot, complete the transfer, then send the receipt screenshot in that chat.',
+    paymentReviewGuide: 'Your receipt is safely recorded. You do not need to send it again. We will notify you in the same Telegram chat after review.',
+    paymentRejectedGuide: 'Your order is still saved. Open the bot and send a new screenshot that fixes the reason below.', checkPayment: 'Check status in Zemen bot', reason: 'Reason',
     insideGallery: 'See inside', previewCount: 'Preview', viewProduct: 'View product', noReviews: 'Verified customer notes will appear here.',
+    trustCenter: 'Trust Center', purchaseHelp: 'Purchase & payment help', terms: 'Terms of purchase', refund: 'Refund policy', privacy: 'Privacy notice', delivery: 'Delivery promise',
+    agreementNotice: 'Before paying, review the purchase terms, refund policy, and delivery promise. You will confirm them securely in the Zemen bot before payment details are shown.',
   },
   am: {
     home: 'ዋና', store: 'ሱቅ', library: 'የእኔ ላይብረሪ', earn: 'ኮሚሽን', account: 'አካውንት',
@@ -33,7 +39,13 @@ const copy = {
     paymentNext: 'የክፍያ አማራጮችዎ በZemen bot ውስጥ ተዘጋጅተዋል።', openPayment: 'ክፍያውን በZemen bot ይክፈቱ',
     paymentReady: 'ክፍያው ለTelegram ተዘጋጅቷል', paymentGuide: 'ከታች ያለውን ቁልፍ ይጫኑና በZemen bot chat ውስጥ የመጨረሻውን መልዕክት ይመልከቱ። Telegram ሲከፈት Mini App መቀነሱ የተለመደ ነው።',
     paymentStepOne: 'Zemen botን ይክፈቱ', paymentStepTwo: 'በአዲሱ መልዕክት CBE ወይም Telebirr ይምረጡ', preparingPayment: 'ክፍያው እየተዘጋጀ ነው…',
+    paymentAwaitingReceipt: 'Receiptዎን በመጠበቅ ላይ', paymentUnderReview: 'Receiptዎ ደርሷል · በማረጋገጥ ላይ', paymentNeedsProof: 'አዲስ screenshot ያስፈልጋል',
+    paymentAwaitingGuide: 'በBot ውስጥ ይቀጥሉ፣ ክፍያውን ይፈጽሙና receipt screenshotውን በዚያው chat ይላኩ።',
+    paymentReviewGuide: 'Receiptዎ በደህና ተመዝግቧል። እንደገና መላክ አያስፈልግዎትም፤ ሲረጋገጥ በዚሁ Telegram chat እናሳውቅዎታለን።',
+    paymentRejectedGuide: 'ትዕዛዝዎ አልጠፋም። Botን ከፍተው ከታች ያለውን ምክንያት የሚያስተካክል አዲስ screenshot ይላኩ።', checkPayment: 'ክፍያውን በZemen bot ይፈትሹ', reason: 'ምክንያት',
     insideGallery: 'የምርቱን ውስጥ ይዩ', previewCount: 'ቅድመ እይታ', viewProduct: 'ምርቱን ይዩ', noReviews: 'የተረጋገጡ የገዢ አስተያየቶች እዚህ ይታያሉ።',
+    trustCenter: 'የደንበኛ መተማመኛ', purchaseHelp: 'የግዢና ክፍያ እገዛ', terms: 'የግዢ ውሎች', refund: 'የገንዘብ ተመላሽ ፖሊሲ', privacy: 'የግላዊነት ማስታወቂያ', delivery: 'የዲሊቨሪ ቃል',
+    agreementNotice: 'ከመክፈልዎ በፊት የግዢ ውሎችን፣ የተመላሽ ፖሊሲውንና የዲሊቨሪ ቃላችንን ይመልከቱ። የክፍያ መረጃ ከመታየቱ በፊት በZemen bot ውስጥ ያረጋግጣሉ።',
   },
 } as const
 

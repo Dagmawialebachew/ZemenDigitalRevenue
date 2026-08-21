@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from './api/client'
-import type { BootstrapResponse, CheckoutResponse, Language, LibraryItem, ProductDetail, ReferralCenter } from './api/types'
+import type { BootstrapResponse, CheckoutStatus, Language, LibraryItem, PolicyDocument, PolicyKind, ProductDetail, ReferralCenter } from './api/types'
 import { BottomNav, type Tab } from './components/BottomNav'
 import { BrandMark } from './components/BrandMark'
 import { ErrorState, LoadingState } from './components/States'
@@ -10,10 +10,18 @@ import { EarnView } from './views/EarnView'
 import { HomeView } from './views/HomeView'
 import { LibraryView } from './views/LibraryView'
 import { ProductView } from './views/ProductView'
+import { PolicyView } from './views/PolicyView'
 import { StoreView } from './views/StoreView'
 import { haptic, openTelegram, prepareTelegramShell, tg } from './telegram/webapp'
 
-type Screen = { kind: 'tab'; tab: Tab } | { kind: 'product'; slug: string }
+type Screen = { kind: 'tab'; tab: Tab } | { kind: 'product'; slug: string } | { kind: 'policy'; policy: PolicyKind }
+
+function initialScreen(): Screen {
+  const section = new URLSearchParams(window.location.search).get('section')
+  return section === 'library' || section === 'store' || section === 'earn' || section === 'account'
+    ? { kind: 'tab', tab: section }
+    : { kind: 'tab', tab: 'home' }
+}
 
 function preferredLanguage(): Language {
   const code = tg && (window.Telegram?.WebApp as unknown as { initDataUnsafe?: { user?: { language_code?: string } } }).initDataUnsafe?.user?.language_code
@@ -23,14 +31,16 @@ function preferredLanguage(): Language {
 export default function App() {
   const [language, setLanguage] = useState<Language>(preferredLanguage())
   const [bootstrap, setBootstrap] = useState<BootstrapResponse | null>(null)
-  const [screen, setScreen] = useState<Screen>({ kind: 'tab', tab: 'home' })
+  const [screen, setScreen] = useState<Screen>(initialScreen)
   const [product, setProduct] = useState<ProductDetail | null>(null)
   const [library, setLibrary] = useState<LibraryItem[] | null>(null)
   const [referrals, setReferrals] = useState<ReferralCenter | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [checkout, setCheckout] = useState<CheckoutResponse | null>(null)
+  const [checkout, setCheckout] = useState<CheckoutStatus | null>(null)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
+  const [policyDocument, setPolicyDocument] = useState<PolicyDocument | null>(null)
+  const [policyReturn, setPolicyReturn] = useState<'account' | 'product'>('account')
   const copy = t(language)
 
   const initialize = useCallback(async () => {
@@ -48,7 +58,9 @@ export default function App() {
       if (chosen !== language) setLanguage(chosen)
       const data = await api.bootstrap(chosen)
       setBootstrap(data)
-      if (data.focus_product_slug) setScreen({ kind: 'tab', tab: 'home' })
+      const landing = initialScreen()
+      if (landing.kind === 'tab' && landing.tab === 'library') setLibrary((await api.library(chosen)).items)
+      if (landing.kind === 'tab' && landing.tab === 'earn') setReferrals(await api.referrals())
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not open Zemen')
     } finally {
@@ -74,16 +86,19 @@ export default function App() {
       if (screen.kind === 'product') {
         setProduct(null)
         setScreen({ kind: 'tab', tab: 'store' })
+      } else if (screen.kind === 'policy') {
+        setPolicyDocument(null)
+        setScreen(policyReturn === 'product' && product ? { kind: 'product', slug: product.slug } : { kind: 'tab', tab: 'account' })
       }
     }
-    if (screen.kind === 'product') {
+    if (screen.kind === 'product' || screen.kind === 'policy') {
       webApp.BackButton.show()
       webApp.BackButton.onClick(onBack)
     } else {
       webApp.BackButton.hide()
     }
     return () => webApp.BackButton.offClick(onBack)
-  }, [screen])
+  }, [screen, policyReturn, product])
 
   const openProduct = useCallback(async (slug: string) => {
     haptic()
@@ -91,7 +106,7 @@ export default function App() {
     try {
       const detail = await api.product(slug, language)
       setProduct(detail)
-      setCheckout(null)
+      setCheckout(detail.active_checkout || null)
       setScreen({ kind: 'product', slug })
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (err) {
@@ -124,7 +139,13 @@ export default function App() {
     setBootstrap(data)
     setLibrary(null)
     setReferrals(null)
-    if (screen.kind === 'product') setProduct(await api.product(screen.slug, next))
+    if (screen.kind === 'product') {
+      const detail = await api.product(screen.slug, next)
+      setProduct(detail)
+      setCheckout(detail.active_checkout || null)
+    } else if (screen.kind === 'policy') {
+      setPolicyDocument(await api.policy(screen.policy, next))
+    }
   }, [language, screen])
 
   const submitReview = useCallback(async (slug:string,rating:number,text:string) => {
@@ -137,6 +158,23 @@ export default function App() {
     if (username) openTelegram(`https://t.me/${username.replace('@','')}`)
     else tg?.close()
   }
+
+  const openPolicy = useCallback(async (kind: PolicyKind) => {
+    haptic()
+    setLoading(true)
+    setError('')
+    try {
+      const document = await api.policy(kind, language)
+      setPolicyReturn(screen.kind === 'product' ? 'product' : 'account')
+      setPolicyDocument(document)
+      setScreen({ kind: 'policy', policy: kind })
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load policy')
+    } finally {
+      setLoading(false)
+    }
+  }, [language, screen.kind])
 
   const openPaymentChat = useCallback(() => {
     if (checkout?.chat_url) openTelegram(checkout.chat_url)
@@ -170,8 +208,9 @@ export default function App() {
       return
     }
     const handler = () => { checkout ? openPaymentChat() : void buy() }
+    const reviewing = checkout?.payment_status === 'pending_review' || checkout?.payment_status === 'flagged'
     button.setParams({
-      text: checkout ? copy.openPayment : checkoutLoading ? copy.preparingPayment : `${copy.getIt} · ${product.display_price_br} Br`,
+      text: checkout ? (reviewing ? copy.checkPayment : copy.openPayment) : checkoutLoading ? copy.preparingPayment : `${copy.getIt} · ${product.display_price_br} Br`,
       color: '#8BDF31',
       text_color: '#07100A',
       has_shine_effect: true,
@@ -181,9 +220,9 @@ export default function App() {
     if (checkoutLoading) button.disable().showProgress()
     else button.hideProgress().enable()
     return () => { button.offClick(handler); button.hide() }
-  }, [screen, product, checkout, checkoutLoading, copy.getIt, copy.openPayment, copy.preparingPayment, openPaymentChat])
+  }, [screen, product, checkout, checkoutLoading, copy.checkPayment, copy.getIt, copy.openPayment, copy.preparingPayment, openPaymentChat])
 
-  const activeTab = useMemo<Tab>(() => screen.kind === 'tab' ? screen.tab : 'store', [screen])
+  const activeTab = useMemo<Tab>(() => screen.kind === 'tab' ? screen.tab : screen.kind === 'product' ? 'store' : 'account', [screen])
 
   if (loading && !bootstrap) return <LoadingState label={copy.loading} />
   if (error && !bootstrap) return <ErrorState message={error} retry={initialize} retryLabel={copy.retry} />
@@ -192,14 +231,16 @@ export default function App() {
   let content
   if (screen.kind === 'product') {
     content = product
-      ? <ProductView product={product} language={language} checkout={checkout} checkoutLoading={checkoutLoading} onBuy={buy} onOpenPayment={openPaymentChat} onPreview={() => void api.productAction(product.slug, 'preview')} />
+      ? <ProductView product={product} language={language} checkout={checkout} checkoutLoading={checkoutLoading} onBuy={buy} onOpenPayment={openPaymentChat} onPreview={() => void api.productAction(product.slug, 'preview')} onPolicy={openPolicy} />
       : <LoadingState label={copy.loading} />
+  } else if (screen.kind === 'policy') {
+    content = policyDocument ? <PolicyView document={policyDocument} language={language} onSupport={openChat} /> : <LoadingState label={copy.loading} />
   } else {
     switch (screen.tab) {
       case 'store': content = <StoreView products={bootstrap.products} language={language} onProduct={openProduct} />; break
       case 'library': content = <LibraryView items={library || []} language={language} onProduct={openProduct} onOpenChat={openChat} onReview={submitReview} />; break
       case 'earn': content = referrals ? <EarnView data={referrals} language={language} /> : <LoadingState label={copy.loading} />; break
-      case 'account': content = <AccountView data={bootstrap} language={language} onLanguage={changeLanguage} onChat={openChat} />; break
+      case 'account': content = <AccountView data={bootstrap} language={language} onLanguage={changeLanguage} onChat={openChat} onPolicy={openPolicy} />; break
       default: content = <HomeView data={bootstrap} language={language} onProduct={openProduct} onStore={() => changeTab('store')} />
     }
   }

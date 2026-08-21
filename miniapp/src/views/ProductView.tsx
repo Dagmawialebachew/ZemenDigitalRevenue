@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { CheckoutResponse, Language, ProductDetail } from '../api/types'
+import type { CheckoutStatus, Language, PolicyKind, ProductDetail } from '../api/types'
 import { CheckIcon, StarIcon } from '../components/Icons'
 import { t } from '../i18n'
 
@@ -47,14 +47,15 @@ function descriptionParagraphs(value: string, product: ProductDetail): string[] 
 type ProductViewProps = {
   product: ProductDetail
   language: Language
-  checkout: CheckoutResponse | null
+  checkout: CheckoutStatus | null
   checkoutLoading: boolean
   onBuy: () => void
   onOpenPayment: () => void
   onPreview: () => void
+  onPolicy: (kind: PolicyKind) => void
 }
 
-export function ProductView({ product, language, checkout, checkoutLoading, onBuy, onOpenPayment, onPreview }: ProductViewProps) {
+export function ProductView({ product, language, checkout, checkoutLoading, onBuy, onOpenPayment, onPreview, onPolicy }: ProductViewProps) {
   const c = t(language)
   const [mediaIndex, setMediaIndex] = useState(0)
   const paymentRef = useRef<HTMLDivElement>(null)
@@ -65,6 +66,24 @@ export function ProductView({ product, language, checkout, checkoutLoading, onBu
   const benefits = useMemo(() => product.benefits.map(asText).filter(Boolean), [product.benefits])
   const faqs = useMemo(() => product.faq.map(v => typeof v === 'object' && v ? v as Record<string, unknown> : { question: String(v) }), [product.faq])
   const description = useMemo(() => descriptionParagraphs(product.description || product.short_description, product), [product])
+  const paymentStatus = checkout?.payment_status || ''
+  const paymentUnderReview = ['pending_review', 'flagged'].includes(paymentStatus)
+  const paymentRejected = paymentStatus === 'rejected'
+  const paymentAwaitingReceipt = paymentStatus === 'awaiting_proof'
+  const paymentHeading = paymentUnderReview
+    ? c.paymentUnderReview
+    : paymentRejected
+      ? c.paymentNeedsProof
+      : paymentAwaitingReceipt
+        ? c.paymentAwaitingReceipt
+        : c.paymentReady
+  const paymentGuide = paymentUnderReview
+    ? c.paymentReviewGuide
+    : paymentRejected
+      ? c.paymentRejectedGuide
+      : paymentAwaitingReceipt
+        ? c.paymentAwaitingGuide
+        : c.paymentGuide
 
   useEffect(() => {
     if (checkout) paymentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -87,12 +106,14 @@ export function ProductView({ product, language, checkout, checkoutLoading, onBu
           <div>{product.has_offer && <span>{c.regularPrice} · <s>{product.regular_price_br} Br</s></span>}<strong>{product.display_price_br} <small>Br</small></strong></div>
           {product.has_offer && <em>{c.offer}</em>}
         </div>
-        <button className="primary-button buy-button" disabled={product.is_owned || checkoutLoading} onClick={onBuy}>{product.is_owned ? c.owned : checkoutLoading ? c.preparingPayment : checkout ? c.openPayment : c.getIt}</button>
+        {!product.is_owned && <div className="checkout-disclosure"><p>{c.agreementNotice}</p><div><button onClick={() => onPolicy('terms')}>{c.terms}</button><button onClick={() => onPolicy('refund')}>{c.refund}</button><button onClick={() => onPolicy('delivery')}>{c.delivery}</button></div></div>}
+        <button className="primary-button buy-button" disabled={product.is_owned || checkoutLoading} onClick={onBuy}>{product.is_owned ? c.owned : checkoutLoading ? c.preparingPayment : checkout ? paymentUnderReview ? c.checkPayment : c.openPayment : c.getIt}</button>
         {checkout && <div className="payment-handoff" ref={paymentRef} role="status">
-          <div className="payment-handoff__heading"><span>✓</span><div><small>{c.paymentReady}</small><strong>{checkout.total_due_br} Br</strong></div></div>
-          <p>{c.paymentGuide}</p>
-          <ol><li>{c.paymentStepOne}</li><li>{c.paymentStepTwo}</li></ol>
-          <button className="primary-button" onClick={onOpenPayment}>{c.openPayment} <span>↗</span></button>
+          <div className="payment-handoff__heading"><span>{paymentRejected ? '!' : paymentUnderReview ? '⌛' : '✓'}</span><div><small>{paymentHeading}</small><strong>{checkout.total_due_br} Br{checkout.payment_method ? ` · ${checkout.payment_method.toUpperCase()}` : ''}</strong></div></div>
+          <p>{paymentGuide}</p>
+          {paymentRejected && checkout.rejection_reason && <div className="payment-reason"><b>{c.reason}</b><span>{checkout.rejection_reason}</span></div>}
+          {!checkout.payment_status && <ol><li>{c.paymentStepOne}</li><li>{c.paymentStepTwo}</li></ol>}
+          <button className="primary-button" onClick={onOpenPayment}>{paymentUnderReview ? c.checkPayment : c.openPayment} <span>↗</span></button>
           <code>{checkout.order_public_id}</code>
         </div>}
         {samplePdf&&<a className="sample-button" href={samplePdf.url} target="_blank" rel="noreferrer" onClick={onPreview}><span>PDF</span><div><b>{language==='am'?'ነፃ ናሙናውን ይመልከቱ':'Open the free sample'}</b><small>{samplePdf.caption||samplePdf.file_name||'Preview before you buy'}</small></div></a>}

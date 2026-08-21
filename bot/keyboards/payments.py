@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from aiogram.enums import ButtonStyle
-from aiogram.types import CopyTextButton, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import CopyTextButton, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.keyboards.primitives import inline_action
@@ -52,6 +52,37 @@ def payment_method_keyboard(
     return builder.as_markup()
 
 
+def purchase_policy_keyboard(*, order_public_id: str, language: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        inline_action(
+            text="📜 Terms" if language == "en" else "📜 የግዢ ውሎች",
+            callback_data=f"legal:terms:{order_public_id}",
+            style=None,
+        ),
+        inline_action(
+            text="↩️ Refunds" if language == "en" else "↩️ Refund policy",
+            callback_data=f"legal:refund:{order_public_id}",
+            style=None,
+        ),
+    )
+    builder.row(
+        inline_action(
+            text="✅ I understand and agree" if language == "en" else "✅ አንብቤ ተስማምቻለሁ",
+            callback_data=f"pay:accept:{order_public_id}",
+            style=ButtonStyle.SUCCESS,
+        )
+    )
+    builder.row(
+        inline_action(
+            text="💬 Ask before paying" if language == "en" else "💬 ከመክፈልዎ በፊት ይጠይቁ",
+            callback_data="menu:help",
+            style=None,
+        )
+    )
+    return builder.as_markup()
+
+
 def payment_instructions_keyboard(
     *,
     payment_public_id: str,
@@ -79,6 +110,59 @@ def payment_instructions_keyboard(
             text="✅ I've Paid" if language == "en" else "✅ ከፍያለሁ",
             callback_data=f"pay:paid:{payment_public_id}",
             style=ButtonStyle.SUCCESS,
+        )
+    )
+    return builder.as_markup()
+
+
+def payment_followup_keyboard(
+    *,
+    order_public_id: str,
+    language: str,
+    state: str = "review",
+    mini_app_url: str = "",
+) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    if state == "owned":
+        if mini_app_url:
+            separator = "&" if "?" in mini_app_url else "?"
+            builder.row(
+                InlineKeyboardButton(
+                    text="📚 Open Library & review" if language == "en" else "📚 Library ክፈቱና አስተያየት ይስጡ",
+                    web_app=WebAppInfo(url=f"{mini_app_url}{separator}section=library"),
+                    style=ButtonStyle.SUCCESS,
+                )
+            )
+        else:
+            builder.row(
+                inline_action(
+                    text="📚 Open My Library" if language == "en" else "📚 Libraryዎን ይክፈቱ",
+                    callback_data="menu:library",
+                    style=ButtonStyle.SUCCESS,
+                )
+            )
+    else:
+        label = (
+            "📸 Send a new screenshot"
+            if state == "rejected" and language == "en"
+            else "📸 አዲስ screenshot ይላኩ"
+            if state == "rejected"
+            else "🔄 Check payment status"
+            if language == "en"
+            else "🔄 የክፍያውን ሁኔታ ይፈትሹ"
+        )
+        builder.row(
+            inline_action(
+                text=label,
+                callback_data=f"pay:status:{order_public_id}",
+                style=ButtonStyle.PRIMARY,
+            )
+        )
+    builder.row(
+        inline_action(
+            text="💬 Get help" if language == "en" else "💬 እገዛ ያግኙ",
+            callback_data="menu:help",
+            style=None,
         )
     )
     return builder.as_markup()

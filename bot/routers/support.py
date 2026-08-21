@@ -43,6 +43,8 @@ async def _open_support(
     telegram_user: User,
     db: Database,
     settings: Settings,
+    subject: str = "general_support",
+    order_id: object | None = None,
 ) -> None:
     current = await load_current_entry_context(
         db,
@@ -55,21 +57,26 @@ async def _open_support(
 
     case = await OperationsService(db, settings).open_support(
         user_id=current.user_id,
+        order_id=order_id,
+        subject=subject,
     )
 
+    payment_support = subject in {"payment_support", "refund_request", "missing_delivery"}
     if current.language_for_copy == "en":
         text = (
-            "💬 <b>Zemen Support</b>\n\n"
+            f"{'💳 <b>Zemen Payment Support</b>' if payment_support else '💬 <b>Zemen Support</b>'}\n\n"
             f"Your support case is <code>{case['public_id']}</code>.\n\n"
             "Send your question, screenshot, photo, or document here. "
-            "Our team will receive it in ZEMEN OPS and reply in this chat."
+            "Our team will receive it in ZEMEN OPS and reply in this chat.\n\n"
+            "Support hours: every day, 8:00 AM–10:00 PM EAT. General responses are normally within 12 hours."
         )
     else:
         text = (
-            "💬 <b>Zemen Support</b>\n\n"
+            f"{'💳 <b>የZemen ክፍያ Support</b>' if payment_support else '💬 <b>Zemen Support</b>'}\n\n"
             f"Support caseዎ <code>{case['public_id']}</code> ነው።\n\n"
             "ጥያቄዎን፣ screenshot፣ photo ወይም document እዚህ ይላኩ። "
-            "ቡድናችን ZEMEN OPS ውስጥ ይቀበለዋል፤ ምላሹንም እዚሁ ያገኛሉ።"
+            "ቡድናችን ZEMEN OPS ውስጥ ይቀበለዋል፤ ምላሹንም እዚሁ ያገኛሉ።\n\n"
+            "Support hours: በየቀኑ 8:00 AM–10:00 PM EAT። General response በተለምዶ በ12 ሰዓት ውስጥ ይሰጣል።"
         )
 
     await message.answer(text)
@@ -80,6 +87,7 @@ async def _open_support(
 # ---------------------------------------------------------------------------
 
 @router.message(Command("help"))
+@router.message(Command("support"))
 async def support_command(
     message: Message,
     db: Database,
@@ -93,6 +101,33 @@ async def support_command(
         message.from_user,
         db,
         settings,
+    )
+
+
+@router.message(Command("paysupport"))
+async def payment_support_command(
+    message: Message,
+    db: Database,
+    settings: Settings,
+) -> None:
+    if message.chat.type != "private" or message.from_user is None:
+        raise SkipHandler
+    current = await load_current_entry_context(db, telegram_user=message.from_user)
+    if current is None:
+        await message.answer("👋 Send /start first.")
+        return
+    async with db.acquire() as conn:
+        session = await conn.fetchrow(
+            "SELECT active_order_id FROM conversation_sessions WHERE user_id=$1",
+            current.user_id,
+        )
+    await _open_support(
+        message,
+        message.from_user,
+        db,
+        settings,
+        subject="payment_support",
+        order_id=session["active_order_id"] if session else None,
     )
 
 
@@ -116,6 +151,39 @@ async def support_menu(
         callback.from_user,
         db,
         settings,
+    )
+
+
+@router.callback_query(F.data.startswith("support:category:"))
+async def categorized_support_menu(
+    callback: CallbackQuery,
+    db: Database,
+    settings: Settings,
+) -> None:
+    if callback.message is None or callback.message.chat.type != "private" or not callback.data:
+        await callback.answer()
+        return
+    subject = callback.data.rsplit(":", 1)[-1]
+    if subject not in {"refund_request", "missing_delivery", "payment_support"}:
+        await callback.answer("Support option unavailable", show_alert=True)
+        return
+    current = await load_current_entry_context(db, telegram_user=callback.from_user)
+    if current is None:
+        await callback.answer("Send /start first", show_alert=True)
+        return
+    async with db.acquire() as conn:
+        session = await conn.fetchrow(
+            "SELECT active_order_id FROM conversation_sessions WHERE user_id=$1",
+            current.user_id,
+        )
+    await callback.answer()
+    await _open_support(
+        callback.message,
+        callback.from_user,
+        db,
+        settings,
+        subject=subject,
+        order_id=session["active_order_id"] if session else None,
     )
 
 

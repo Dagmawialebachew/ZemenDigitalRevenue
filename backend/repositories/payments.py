@@ -71,6 +71,52 @@ class PaymentRepository:
             product_id,
         )
 
+    async def checkout_status_for_product(
+        self,
+        conn: asyncpg.Connection,
+        *,
+        user_id: Any,
+        product_id: Any,
+    ) -> asyncpg.Record | None:
+        """Return the buyer's current checkout without locking or mutating it."""
+        return await conn.fetchrow(
+            """
+            SELECT
+                o.public_id AS order_public_id,
+                o.status AS order_status,
+                o.total_due_br,
+                o.pricing_type,
+                o.expires_at,
+                pay.public_id AS payment_public_id,
+                pay.status AS payment_status,
+                pay.payment_method,
+                pay.rejection_reason_text,
+                pay.updated_at AS payment_updated_at,
+                proof.created_at AS proof_submitted_at
+            FROM orders o
+            JOIN order_items oi ON oi.order_id=o.id
+            LEFT JOIN LATERAL (
+                SELECT p.*
+                FROM payments p
+                WHERE p.order_id=o.id
+                ORDER BY p.created_at DESC
+                LIMIT 1
+            ) pay ON TRUE
+            LEFT JOIN payment_proofs proof ON proof.id=pay.latest_proof_id
+            WHERE o.user_id=$1
+              AND oi.product_id=$2
+              AND o.status IN (
+                  'created','awaiting_payment','proof_submitted',
+                  'under_review','needs_new_proof'
+              )
+              AND (o.expires_at IS NULL OR o.expires_at>now())
+            ORDER BY o.created_at DESC
+            LIMIT 1
+            """,
+            user_id,
+            product_id,
+        )
+
     async def create_order(
         self,
         conn: asyncpg.Connection,

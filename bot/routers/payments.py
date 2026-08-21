@@ -14,8 +14,10 @@ from backend.repositories.users import UserRepository
 from backend.services.payments import PaymentService
 from bot.keyboards.payments import (
     external_checkout_keyboard,
+    payment_followup_keyboard,
     payment_instructions_keyboard,
     payment_method_keyboard,
+    purchase_policy_keyboard,
     payment_reject_reason_keyboard,
     payment_review_keyboard,
 )
@@ -97,11 +99,9 @@ async def send_checkout(
         return
     await message.answer(
         checkout_intro(checkout, language=language),
-        reply_markup=payment_method_keyboard(
+        reply_markup=purchase_policy_keyboard(
             order_public_id=checkout.public_id,
             language=language,
-            cbe_enabled=cbe,
-            telebirr_enabled=telebirr,
         ),
     )
 
@@ -122,7 +122,13 @@ async def send_order_resume(
                 f"✅ <b>This order is already paid.</b>\n\n📦 {escape(resume.product_title)}\n\nYour product is available in My Library. 📚"
                 if resume.language == "en"
                 else f"✅ <b>ይህ ትዕዛዝ ክፍያው ተረጋግጧል።</b>\n\n📦 {escape(resume.product_title)}\n\nምርትዎ My Library ውስጥ ይገኛል። 📚"
-            )
+            ),
+            reply_markup=payment_followup_keyboard(
+                order_public_id=resume.order_public_id,
+                language=resume.language,
+                state="owned",
+                mini_app_url=settings.mini_app_url,
+            ),
         )
         return
     if resume.order_status in {"cancelled", "expired", "refunded"}:
@@ -132,8 +138,24 @@ async def send_order_resume(
             else "⚠️ ይህ checkout ከእንግዲህ አይሰራም። ምርቱን እንደገና ከፍተው አዲስ checkout ይጀምሩ።"
         )
         return
+    if not resume.policies_accepted:
+        await message.answer(
+            resume_text(resume),
+            reply_markup=purchase_policy_keyboard(
+                order_public_id=resume.order_public_id,
+                language=resume.language,
+            ),
+        )
+        return
     if resume.payment_status in {"pending_review", "flagged", "rejected"}:
-        await message.answer(resume_text(resume))
+        await message.answer(
+            resume_text(resume),
+            reply_markup=payment_followup_keyboard(
+                order_public_id=resume.order_public_id,
+                language=resume.language,
+                state="rejected" if resume.payment_status == "rejected" else "review",
+            ),
+        )
         return
     if resume.payment_status == "awaiting_proof" and resume.payment_method:
         text, destination = payment_instructions(resume=resume, settings=settings)
@@ -157,6 +179,37 @@ async def send_order_resume(
             telebirr_enabled=telebirr,
         ),
     )
+
+
+@router.callback_query(F.data.startswith("pay:status:"))
+async def payment_status(
+    callback: CallbackQuery,
+    db: Database,
+    settings: Settings,
+) -> None:
+    if callback.message is None or callback.data is None:
+        await callback.answer()
+        return
+    current = await load_current_entry_context(db, telegram_user=callback.from_user)
+    if current is None:
+        await callback.answer("Please restart the bot", show_alert=True)
+        return
+    order_public_id = callback.data.split(":", 2)[2]
+    await callback.answer("🔄")
+    try:
+        await send_order_resume(
+            message=callback.message,
+            db=db,
+            settings=settings,
+            user_id=current.user_id,
+            order_public_id=order_public_id,
+        )
+    except (LookupError, ValueError):
+        await callback.message.answer(
+            "⚠️ This checkout is no longer active."
+            if current.language_for_copy == "en"
+            else "⚠️ ይህ checkout ከእንግዲህ አይሰራም።"
+        )
 
 
 @router.callback_query(F.data.startswith("pay:method:"))
@@ -196,6 +249,46 @@ async def choose_payment_method(
             destination=destination,
             amount_text=money(resume.total_due_br),
             language=resume.language,
+        ),
+    )
+
+
+@router.callback_query(F.data.startswith("pay:accept:"))
+async def accept_purchase_policies(
+    callback: CallbackQuery,
+    db: Database,
+    settings: Settings,
+) -> None:
+    if callback.message is None or callback.data is None:
+        await callback.answer()
+        return
+    current = await load_current_entry_context(db, telegram_user=callback.from_user)
+    if current is None:
+        await callback.answer("Please restart the bot", show_alert=True)
+        return
+    order_public_id = callback.data.split(":", 2)[2]
+    language = current.language_for_copy
+    try:
+        resume = await PaymentService(db, settings).accept_purchase_policies(
+            user_id=current.user_id,
+            order_public_id=order_public_id,
+            language=language,
+        )
+    except (LookupError, ValueError) as exc:
+        await callback.answer(str(exc), show_alert=True)
+        return
+    cbe, telebirr = _methods(settings)
+    if not (cbe or telebirr):
+        await callback.answer("Payment destinations are not configured", show_alert=True)
+        return
+    await callback.answer("✅")
+    await callback.message.answer(
+        resume_text(resume),
+        reply_markup=payment_method_keyboard(
+            order_public_id=resume.order_public_id,
+            language=language,
+            cbe_enabled=cbe,
+            telebirr_enabled=telebirr,
         ),
     )
 
@@ -303,7 +396,14 @@ async def _accept_proof(
             if language == "en"
             else "✅ <b>Receiptዎ ደርሶናል።</b>\n\nክፍያዎን እያረጋገጥን ነው። ሌላ ምንም መላክ አያስፈልግዎትም። 🔎"
         )
-    await message.answer(text)
+    await message.answer(
+        text,
+        reply_markup=payment_followup_keyboard(
+            order_public_id=result.order_public_id,
+            language=language,
+            state="review",
+        ),
+    )
 
 
 @router.message(F.photo)
@@ -582,4 +682,3 @@ async def ops_flag(callback: CallbackQuery, db: Database, settings: Settings) ->
         await callback.message.edit_reply_markup(
             reply_markup=payment_review_keyboard(payment_public_id=payment_public_id)
         )
-

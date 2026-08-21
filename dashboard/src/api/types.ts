@@ -14,6 +14,7 @@ export type Payment = {
   created_at:string; updated_at:string; rejection_reason_code?:string|null; order_public_id:string; order_status:string; pricing_type:string;
   total_due_br:number|string; discount_total_br:number|string; user_id:string; telegram_id:number; first_name:string; last_name?:string|null; username?:string|null;
   product_title:string; proof_created_at?:string|null; proof_status?:string|null; verifier_data?:Record<string,unknown>|null;
+  review_wait_seconds?:number|string;
   platform?:string|null; campaign?:string|null; creative?:string|null; referrer_username?:string|null
 }
 export type Order = { id:string; public_id:string; status:string; subtotal_br:number|string; discount_total_br:number|string; total_due_br:number|string; pricing_type:string; created_at:string; paid_at?:string|null; expires_at?:string|null; user_id:string; telegram_id:number; first_name:string; username?:string|null; product_title:string; platform?:string|null; campaign?:string|null; creative?:string|null; referred:boolean }

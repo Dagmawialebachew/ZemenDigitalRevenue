@@ -51,8 +51,13 @@ def resume_text(resume: PaymentResume) -> str:
                 "We'll message you here as soon as it is reviewed. ✅"
             )
         if resume.payment_status == "rejected":
+            reason = (
+                f"\n<b>Reason:</b> {escape(resume.rejection_reason)}\n"
+                if resume.rejection_reason else ""
+            )
             return (
                 f"📸 <b>We need a new payment screenshot</b>\n\n📦 {escape(resume.product_title)}\n"
+                f"{reason}"
                 "Send the replacement screenshot directly in this chat."
             )
         return checkout_intro_from_resume(resume)
@@ -63,8 +68,13 @@ def resume_text(resume: PaymentResume) -> str:
             "ሲረጋገጥ እዚሁ እናሳውቅዎታለን። ✅"
         )
     if resume.payment_status == "rejected":
+        reason = (
+            f"\n<b>ምክንያት:</b> {escape(resume.rejection_reason)}\n"
+            if resume.rejection_reason else ""
+        )
         return (
             f"📸 <b>አዲስ payment screenshot እንፈልጋለን</b>\n\n📦 {escape(resume.product_title)}\n"
+            f"{reason}"
             "አዲሱን screenshot በቀጥታ እዚህ chat ይላኩ።"
         )
     return checkout_intro_from_resume(resume)

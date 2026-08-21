@@ -98,6 +98,7 @@ class ControlRepository:
                    u.id AS user_id, u.telegram_id, u.first_name, u.last_name, u.username,
                    COALESCE(pt.title, fallback.title, pr.slug) AS product_title,
                    pp.created_at AS proof_created_at, pp.proof_status, pp.verifier_data,
+                   GREATEST(0, EXTRACT(EPOCH FROM (now()-COALESCE(pp.created_at,p.updated_at))))::bigint AS review_wait_seconds,
                    tl.platform, tl.campaign, tl.creative,
                    ref.username AS referrer_username
             FROM payments p
@@ -112,7 +113,8 @@ class ControlRepository:
             LEFT JOIN referral_attributions ra ON ra.id=o.referral_attribution_id
             LEFT JOIN users ref ON ref.id=ra.referrer_user_id
             WHERE ($1::text IS NULL OR p.status=$1)
-            ORDER BY CASE p.status WHEN 'pending_review' THEN 0 WHEN 'flagged' THEN 1 ELSE 2 END,
+            ORDER BY CASE WHEN p.status IN ('pending_review','flagged') THEN 0 ELSE 1 END,
+                     CASE WHEN p.status IN ('pending_review','flagged') THEN COALESCE(pp.created_at,p.updated_at) END ASC NULLS LAST,
                      p.updated_at DESC
             LIMIT $2 OFFSET $3
             """, status, limit, offset))

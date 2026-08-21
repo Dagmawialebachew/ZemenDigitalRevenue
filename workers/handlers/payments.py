@@ -16,7 +16,7 @@ from aiogram.exceptions import (
 from backend.repositories.events import EventRepository
 from backend.repositories.operations import OperationsRepository
 from backend.repositories.payments import PaymentRepository
-from bot.keyboards.payments import payment_review_keyboard
+from bot.keyboards.payments import payment_followup_keyboard, payment_review_keyboard
 from workers.context import WorkerContext
 from workers.errors import PermanentJobError, RetryableJobError
 from workers.models import Job
@@ -146,8 +146,22 @@ async def user_notify_handler(ctx: WorkerContext, job: Job) -> dict[str, object]
     text = str(job.payload.get("text", "")).strip()
     if not text:
         raise PermanentJobError("User notification text is empty", code="BAD_PAYLOAD")
+    reply_markup = None
+    payment_action = str(job.payload.get("payment_action", ""))
+    order_public_id = str(job.payload.get("order_public_id", ""))
+    if payment_action in {"owned", "rejected", "review"} and order_public_id:
+        reply_markup = payment_followup_keyboard(
+            order_public_id=order_public_id,
+            language="en" if job.payload.get("language") == "en" else "am",
+            state=payment_action,
+            mini_app_url=ctx.settings.mini_app_url if payment_action == "owned" else "",
+        )
     try:
-        message = await ctx.bot.send_message(chat_id=telegram_id, text=text)
+        message = await ctx.bot.send_message(
+            chat_id=telegram_id,
+            text=text,
+            reply_markup=reply_markup,
+        )
     except Exception as exc:
         mapped = _telegram_error(exc)
         if mapped is not exc:
@@ -172,11 +186,13 @@ async def product_delivery_handler(ctx: WorkerContext, job: Job) -> dict[str, ob
             """
             SELECT
                 e.*, u.telegram_id, u.preferred_language,
+                o.public_id AS order_public_id,
                 p.id AS product_id, p.slug,
                 COALESCE(pt.title, fallback.title, p.slug) AS product_title,
                 pf.telegram_file_id, pf.file_name, pf.version
             FROM entitlements e
             JOIN users u ON u.id=e.user_id
+            LEFT JOIN orders o ON o.id=e.granted_by_order_id
             JOIN products p ON p.id=e.product_id
             LEFT JOIN product_translations pt
                 ON pt.product_id=p.id AND pt.language=COALESCE(u.preferred_language,'am')
@@ -233,6 +249,12 @@ async def product_delivery_handler(ctx: WorkerContext, job: Job) -> dict[str, ob
             chat_id=int(row["telegram_id"]),
             document=row["telegram_file_id"],
             caption=caption,
+            reply_markup=payment_followup_keyboard(
+                order_public_id=str(row["order_public_id"] or ""),
+                language=language,
+                state="owned",
+                mini_app_url=ctx.settings.mini_app_url,
+            ),
         )
     except Exception as exc:
         mapped = _telegram_error(exc)

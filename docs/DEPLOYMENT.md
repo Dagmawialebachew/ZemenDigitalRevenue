@@ -106,6 +106,10 @@ Enter these prompted values exactly for the `sync: false` variables:
 | Variable | Value |
 | --- | --- |
 | `DATABASE_URL` | Neon direct connection URL |
+| `CBE_ACCOUNT_NAME` | Receiver name shown to buyers; required when CBE is enabled |
+| `CBE_ACCOUNT_NUMBER` | Private Render value; never commit it |
+| `TELEBIRR_ACCOUNT_NAME` | Receiver name shown to buyers; required when Telebirr is enabled |
+| `TELEBIRR_NUMBER` | Private Render value; never commit it |
 | `BOT_TOKEN` | Token from BotFather |
 | `BOT_USERNAME` | Username without `@` |
 | `TELEGRAM_WEBHOOK_BASE_URL` | `https://zemen-digital-api.onrender.com` |
@@ -126,6 +130,11 @@ Enter these prompted values exactly for the `sync: false` variables:
 
 Render generates the Mini App session secret, Control session secret, and OPS
 API key. Never copy those into either Vercel project.
+
+Before an ad launch, complete one real low-value checkout on a non-owner buyer
+account. Confirm that the selected payment surface, receiver name, destination,
+proof review, approval, Telegram delivery, and Mini App Library all agree. Do
+not infer payment readiness from a successful health check.
 
 On first boot the container performs, in order:
 

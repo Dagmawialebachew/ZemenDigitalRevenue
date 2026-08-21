@@ -8,10 +8,12 @@ from typing import Any
 from uuid import UUID
 
 from backend.core.config import Settings
+from backend.domain.policies import policy_document
 from backend.db.pool import Database
 from backend.repositories.events import EventRepository
 from backend.repositories.jobs import JobRepository
 from backend.repositories.journeys import JourneyRepository
+from backend.repositories.payments import PaymentRepository
 from backend.repositories.products import ProductRepository
 from backend.repositories.referrals import ReferralRepository
 from backend.repositories.sessions import ConversationSessionRepository
@@ -53,6 +55,7 @@ class MiniAppService:
         self.store = StorefrontRepository()
         self.events = EventRepository()
         self.journeys = JourneyRepository()
+        self.payments = PaymentRepository()
 
     def _codec(self) -> MiniAppSessionCodec:
         secret = self.settings.mini_app_session_secret or self.settings.bot_token
@@ -60,6 +63,9 @@ class MiniAppService:
             secret=secret,
             ttl_seconds=self.settings.mini_app_session_ttl_seconds,
         )
+
+    def policy(self, *, kind: str, language: str) -> dict[str, object]:
+        return policy_document(kind, language)
 
     async def authenticate_init_data(self, *, init_data: str) -> AuthenticatedMiniAppUser:
         identity = validate_telegram_init_data(
@@ -329,6 +335,9 @@ class MiniAppService:
             review_rows = await self.store.list_featured_reviews(
                 conn, product_id=row["id"], language=language
             )
+            active_checkout = await self.payments.checkout_status_for_product(
+                conn, user_id=user_id, product_id=row["id"]
+            )
             if record_view:
                 await self.journeys.record_unique_signal(
                     conn,
@@ -381,6 +390,33 @@ class MiniAppService:
                 }
             )
 
+        checkout_status = None
+        if active_checkout is not None:
+            chat_url = (
+                f"https://t.me/{self.settings.bot_username.lstrip('@')}?start=ord_{active_checkout['order_public_id']}"
+                if self.settings.bot_username
+                else ""
+            )
+            checkout_status = {
+                "order_public_id": active_checkout["order_public_id"],
+                "order_status": active_checkout["order_status"],
+                "total_due_br": self._money(active_checkout["total_due_br"]),
+                "pricing_type": active_checkout["pricing_type"],
+                "payment_public_id": active_checkout["payment_public_id"],
+                "payment_status": active_checkout["payment_status"],
+                "payment_method": active_checkout["payment_method"],
+                "rejection_reason": active_checkout["rejection_reason_text"],
+                "proof_submitted_at": (
+                    active_checkout["proof_submitted_at"].isoformat()
+                    if active_checkout["proof_submitted_at"] else None
+                ),
+                "expires_at": (
+                    active_checkout["expires_at"].isoformat()
+                    if active_checkout["expires_at"] else None
+                ),
+                "chat_url": chat_url,
+            }
+
         return {
             "slug": row["slug"],
             "title": row["title"],
@@ -408,6 +444,7 @@ class MiniAppService:
                 }
                 for review in review_rows
             ],
+            "active_checkout": checkout_status,
         }
 
     async def library(self, *, user_id: Any, language: str) -> list[dict[str, object]]:
@@ -555,6 +592,7 @@ class MiniAppService:
         )
         return {
             "order_public_id": checkout.public_id,
+            "order_status": checkout.status,
             "status": checkout.status,
             "total_due_br": f"{checkout.total_due_br:.2f}",
             "pricing_type": checkout.pricing_type,

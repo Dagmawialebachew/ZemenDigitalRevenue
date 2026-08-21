@@ -19,6 +19,11 @@ async def configure_bot_ui(bot: Bot, settings: Settings) -> None:
         BotCommand(command="start", description="Start / continue Zemen"),
         BotCommand(command="home", description="Open Zemen home"),
         BotCommand(command="help", description="Get help"),
+        BotCommand(command="paysupport", description="Payment or delivery help"),
+        BotCommand(command="terms", description="Terms of purchase"),
+        BotCommand(command="refund", description="Digital product refund policy"),
+        BotCommand(command="privacy", description="Privacy notice"),
+        BotCommand(command="delivery", description="Review and delivery times"),
     ]
     try:
         await bot.set_my_commands(commands)

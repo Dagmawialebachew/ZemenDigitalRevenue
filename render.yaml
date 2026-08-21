@@ -51,10 +51,18 @@ services:
       - key: CONTROL_COOKIE_SECURE
         value: "true"
       - key: MANUAL_PAYMENT_IN_TELEGRAM_ENABLED
-        value: "false"
+        value: "true"
 
       # Enter these values in Render when the Blueprint is first created.
       - key: DATABASE_URL
+        sync: false
+      - key: CBE_ACCOUNT_NAME
+        sync: false
+      - key: CBE_ACCOUNT_NUMBER
+        sync: false
+      - key: TELEBIRR_ACCOUNT_NAME
+        sync: false
+      - key: TELEBIRR_NUMBER
         sync: false
       - key: BOT_TOKEN
         sync: false

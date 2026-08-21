@@ -269,6 +269,7 @@ class OperationsRepository:
         user_id: UUID,
         product_id: UUID | None,
         order_id: UUID | None,
+        subject: str | None = None,
     ) -> asyncpg.Record:
         existing = await conn.fetchrow(
             """
@@ -276,6 +277,7 @@ class OperationsRepository:
             WHERE user_id=$1
               AND product_id IS NOT DISTINCT FROM $2
               AND order_id IS NOT DISTINCT FROM $3
+              AND subject IS NOT DISTINCT FROM $4
               AND status IN ('open','waiting_customer','waiting_admin')
             ORDER BY opened_at DESC LIMIT 1
             FOR UPDATE
@@ -283,18 +285,20 @@ class OperationsRepository:
             user_id,
             product_id,
             order_id,
+            subject,
         )
         if existing:
             return existing
         return await conn.fetchrow(
             """
-            INSERT INTO support_cases (public_id, user_id, product_id, order_id, status)
-            VALUES ($1,$2,$3,$4,'open') RETURNING *
+            INSERT INTO support_cases (public_id, user_id, product_id, order_id, subject, status)
+            VALUES ($1,$2,$3,$4,$5,'open') RETURNING *
             """,
             public_id,
             user_id,
             product_id,
             order_id,
+            subject,
         )
 
     async def add_support_message(
