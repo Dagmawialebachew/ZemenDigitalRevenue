@@ -41,3 +41,21 @@ def test_preview_pdf_never_uses_the_paid_delivery_file() -> None:
     media = (ROOT / "bot/services/product_media.py").read_text(encoding="utf-8")
     assert 'item.media_type == "preview"' in media
     assert "product_files" not in media
+
+
+def test_miniapp_explains_the_telegram_payment_handoff() -> None:
+    app = (ROOT / "miniapp/src/App.tsx").read_text(encoding="utf-8")
+    view = (ROOT / "miniapp/src/views/ProductView.tsx").read_text(encoding="utf-8")
+    copy = (ROOT / "miniapp/src/i18n/index.ts").read_text(encoding="utf-8")
+    assert "showPopup" not in app
+    assert "payment-handoff" in view
+    assert "The Mini App will minimize" in copy
+    assert "Mini App መቀነሱ የተለመደ ነው" in copy
+    assert "CBE or Telebirr" in copy
+
+
+def test_miniapp_uses_a_visible_gallery_and_readable_description() -> None:
+    view = (ROOT / "miniapp/src/views/ProductView.tsx").read_text(encoding="utf-8")
+    assert "descriptionParagraphs" in view
+    assert "media-rail" in view
+    assert "media-counter" in view

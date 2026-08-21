@@ -13,7 +13,10 @@ const copy = {
     share: 'Share referral link', copyLink: 'Copy link', copied: 'Copied', language: 'Language',
     profile: 'Your profile', support: 'Support', telegramOnly: 'Open this store inside Telegram to continue securely.',
     loading: 'Opening Zemen…', retry: 'Try again', offer: 'Private offer', regularPrice: 'Regular price',
-    paymentNext: 'Payment continues in the Zemen bot.', viewProduct: 'View product', noReviews: 'Verified customer notes will appear here.',
+    paymentNext: 'Your payment options are ready in the Zemen bot.', openPayment: 'Open payment in Zemen bot',
+    paymentReady: 'Payment ready for Telegram', paymentGuide: 'Tap below and check the newest message in your Zemen bot chat. The Mini App will minimize when Telegram opens — that is normal.',
+    paymentStepOne: 'Open the Zemen bot', paymentStepTwo: 'Choose CBE or Telebirr in the newest message', preparingPayment: 'Preparing payment…',
+    insideGallery: 'See inside', previewCount: 'Preview', viewProduct: 'View product', noReviews: 'Verified customer notes will appear here.',
   },
   am: {
     home: 'ዋና', store: 'ሱቅ', library: 'የእኔ ላይብረሪ', earn: 'ኮሚሽን', account: 'አካውንት',
@@ -27,7 +30,10 @@ const copy = {
     share: 'Referral link ያጋሩ', copyLink: 'Link ኮፒ አርግ', copied: 'ተቀድቷል', language: 'ቋንቋ',
     profile: 'የእርስዎ መረጃ', support: 'እገዛ', telegramOnly: 'ሱቁን በደህንነት ለመጠቀም በTelegram ውስጥ ይክፈቱት።',
     loading: 'Zemen እየተከፈተ ነው…', retry: 'እንደገና ይሞክሩ', offer: 'ልዩ ዋጋ', regularPrice: 'መደበኛ ዋጋ',
-    paymentNext: 'ክፍያው በZemen bot ውስጥ ይቀጥላል።', viewProduct: 'ምርቱን ይዩ', noReviews: 'የተረጋገጡ የገዢ አስተያየቶች እዚህ ይታያሉ።',
+    paymentNext: 'የክፍያ አማራጮችዎ በZemen bot ውስጥ ተዘጋጅተዋል።', openPayment: 'ክፍያውን በZemen bot ይክፈቱ',
+    paymentReady: 'ክፍያው ለTelegram ተዘጋጅቷል', paymentGuide: 'ከታች ያለውን ቁልፍ ይጫኑና በZemen bot chat ውስጥ የመጨረሻውን መልዕክት ይመልከቱ። Telegram ሲከፈት Mini App መቀነሱ የተለመደ ነው።',
+    paymentStepOne: 'Zemen botን ይክፈቱ', paymentStepTwo: 'በአዲሱ መልዕክት CBE ወይም Telebirr ይምረጡ', preparingPayment: 'ክፍያው እየተዘጋጀ ነው…',
+    insideGallery: 'የምርቱን ውስጥ ይዩ', previewCount: 'ቅድመ እይታ', viewProduct: 'ምርቱን ይዩ', noReviews: 'የተረጋገጡ የገዢ አስተያየቶች እዚህ ይታያሉ።',
   },
 } as const
 

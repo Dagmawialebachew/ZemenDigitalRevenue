@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from './api/client'
-import type { BootstrapResponse, Language, LibraryItem, ProductDetail, ReferralCenter } from './api/types'
+import type { BootstrapResponse, CheckoutResponse, Language, LibraryItem, ProductDetail, ReferralCenter } from './api/types'
 import { BottomNav, type Tab } from './components/BottomNav'
 import { BrandMark } from './components/BrandMark'
 import { ErrorState, LoadingState } from './components/States'
@@ -29,6 +29,8 @@ export default function App() {
   const [referrals, setReferrals] = useState<ReferralCenter | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [checkout, setCheckout] = useState<CheckoutResponse | null>(null)
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
   const copy = t(language)
 
   const initialize = useCallback(async () => {
@@ -89,6 +91,7 @@ export default function App() {
     try {
       const detail = await api.product(slug, language)
       setProduct(detail)
+      setCheckout(null)
       setScreen({ kind: 'product', slug })
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (err) {
@@ -102,6 +105,7 @@ export default function App() {
     haptic()
     setScreen({ kind: 'tab', tab })
     setProduct(null)
+    setCheckout(null)
     window.scrollTo({ top: 0, behavior: 'smooth' })
     try {
       if (tab === 'library' && library === null) setLibrary((await api.library(language)).items)
@@ -134,13 +138,28 @@ export default function App() {
     else tg?.close()
   }
 
+  const openPaymentChat = useCallback(() => {
+    if (checkout?.chat_url) openTelegram(checkout.chat_url)
+  }, [checkout])
+
   const buy = async () => {
     if (!product || product.is_owned) return
-    const result = await api.checkout(product.slug)
-    haptic('success')
-    tg?.showPopup({ title: product.title, message: `${copy.paymentNext}\n\n${result.total_due_br} Br · ${result.order_public_id}`, buttons: [{ id: 'chat', type: 'default', text: copy.openChat }, { type: 'cancel' }] }, (id) => {
-      if (id === 'chat' && result.chat_url) openTelegram(result.chat_url)
-    })
+    if (checkout) {
+      openPaymentChat()
+      return
+    }
+    setCheckoutLoading(true)
+    setError('')
+    try {
+      const result = await api.checkout(product.slug)
+      setCheckout(result)
+      haptic('success')
+    } catch (err) {
+      haptic('warning')
+      setError(err instanceof Error ? err.message : 'Could not prepare payment')
+    } finally {
+      setCheckoutLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -150,17 +169,19 @@ export default function App() {
       button.hide()
       return
     }
-    const handler = () => { void buy() }
+    const handler = () => { checkout ? openPaymentChat() : void buy() }
     button.setParams({
-      text: `${copy.getIt} · ${product.display_price_br} Br`,
+      text: checkout ? copy.openPayment : checkoutLoading ? copy.preparingPayment : `${copy.getIt} · ${product.display_price_br} Br`,
       color: '#8BDF31',
       text_color: '#07100A',
       has_shine_effect: true,
     })
     button.onClick(handler)
-    button.show().enable()
+    button.show()
+    if (checkoutLoading) button.disable().showProgress()
+    else button.hideProgress().enable()
     return () => { button.offClick(handler); button.hide() }
-  }, [screen, product, copy.getIt])
+  }, [screen, product, checkout, checkoutLoading, copy.getIt, copy.openPayment, copy.preparingPayment, openPaymentChat])
 
   const activeTab = useMemo<Tab>(() => screen.kind === 'tab' ? screen.tab : 'store', [screen])
 
@@ -171,7 +192,7 @@ export default function App() {
   let content
   if (screen.kind === 'product') {
     content = product
-      ? <ProductView product={product} language={language} onBuy={buy} onPreview={() => void api.productAction(product.slug, 'preview')} />
+      ? <ProductView product={product} language={language} checkout={checkout} checkoutLoading={checkoutLoading} onBuy={buy} onOpenPayment={openPaymentChat} onPreview={() => void api.productAction(product.slug, 'preview')} />
       : <LoadingState label={copy.loading} />
   } else {
     switch (screen.tab) {
