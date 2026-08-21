@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 
 from backend.repositories.jobs import JobRepository
 from shared.constants import AIOGRAM_TARGET, APP_NAME, APP_VERSION, TELEGRAM_BOT_API_TARGET
@@ -17,6 +17,12 @@ async def live() -> dict[str, object]:
         "telegram_bot_api_target": TELEGRAM_BOT_API_TARGET,
         "aiogram_target": AIOGRAM_TARGET,
     }
+
+
+@router.head("/health/live", include_in_schema=False)
+async def live_head() -> Response:
+    """Keep free HEAD-only uptime monitors compatible with the liveness route."""
+    return Response(status_code=200)
 
 
 @router.get("/health/ready")
