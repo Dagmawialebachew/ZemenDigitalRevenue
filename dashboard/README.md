@@ -46,6 +46,17 @@ VITE_API_BASE=http://localhost:8000
 
 The login screen exchanges a private Control Owner Key + authorized Telegram admin ID for an HttpOnly signed backend session. The access key is not stored in localStorage/sessionStorage.
 
+## Install on a computer
+
+Zemen Control is an installable Progressive Web App. After the Vercel deployment
+finishes, open the production URL in Chrome or Microsoft Edge and click **Install
+app** near the top-right corner. It then opens from the desktop or Start menu in
+its own window using the Zemen icon.
+
+Only the static application shell is cached. API, authentication, payment, and
+customer responses are deliberately excluded, so live business data still comes
+from the secured backend.
+
 ## Design
 
 Locked Zemen visual language only: near-black, deep forest, bright Zemen green, warm ivory. Product Control deliberately keeps the interface business-readable rather than turning it into a developer console.

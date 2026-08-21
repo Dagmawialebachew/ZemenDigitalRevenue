@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNo
 import { api } from './api/client'
 import type { Admin, Alert, AnalyticsDashboard, Customer, Delivery, FinancialDashboard, MarketingDashboard, Order, Overview, Payment, Product, ReviewItem, SettingsBundle, SupportCase } from './api/types'
 import { Icon, type IconName } from './components/Icon'
+import { InstallControl } from './components/InstallControl'
 import { Loading } from './components/UI'
 import { CustomersView } from './views/CustomersView'
 import { OverviewView } from './views/OverviewView'
@@ -63,7 +64,7 @@ export default function App(){
  const title=useMemo(()=>nav.find(n=>n.view===view)?.label||'Control',[view])
  const logout=async()=>{try{await api.logout()}finally{setAdmin(null)}}
  if(checking)return <div className="screen-center"><Loading/></div>
- if(!admin)return <Login onLogin={setAdmin}/>
+ if(!admin)return <><Login onLogin={setAdmin}/><InstallControl/></>
  let content:ReactNode
  switch(view){
   case'sales':content=<SalesHub payments={payments} orders={orders} deliveries={deliveries} reload={()=>load('sales')}/>;break
@@ -77,5 +78,6 @@ export default function App(){
   case'settings':content=settings?<SettingsView data={settings} reload={()=>load('settings')}/>:<Loading/>;break
   default:content=overview?<OverviewView data={overview} onOpenPayments={()=>go('sales')}/>:<Loading/>
  }
+ content=<><InstallControl/>{content}</>
  return <div className="control-shell"><aside className={`sidebar ${mobileNav?'sidebar--open':''}`}><div className="brand-lockup"><div className="brand-mark"><img src={`${import.meta.env.BASE_URL}zemen-mark.jpg`}/></div><div><b>ZEMEN</b><span>CONTROL</span></div></div><nav>{nav.map(n=><button className={view===n.view?'active':''} onClick={()=>go(n.view)} key={n.view}><Icon name={n.icon}/><span>{n.label}</span>{n.view==='sales'&&overview&&overview.payments_waiting>0&&<i className="nav-count">{overview.payments_waiting}</i>}{n.view==='operations'&&overview&&(overview.deliveries_failed>0||overview.support_waiting>0)&&<i className="nav-dot"/>}</button>)}</nav><div className="sidebar-foot"><div className="admin-chip"><div className="avatar">{admin.display_name[0]}</div><div><b>{admin.display_name}</b><span>{admin.role}</span></div></div><button className="logout" onClick={()=>void logout()}><Icon name="logout"/> Sign out</button></div></aside>{mobileNav&&<button className="nav-scrim" onClick={()=>setMobileNav(false)}/>}<section className="workspace"><header className="control-topbar"><div className="topbar-left"><button className="menu-btn" onClick={()=>setMobileNav(true)}><Icon name="menu"/></button><div><span>CONTROL ROOM</span><h2>{title}</h2></div></div><div className="topbar-actions"><div className="live-chip"><i/> Live</div><button className="icon-btn" onClick={()=>void refresh()} disabled={loading} title="Refresh"><Icon className={loading?'spin':''} name="refresh"/></button></div></header>{error&&<button className="error-banner" onClick={()=>setError('')}>{error}<span>×</span></button>}<main className="workspace-main">{loading&&view!=='overview'?<div className="loading-strip"><i/></div>:null}{content}</main></section></div>
 }
