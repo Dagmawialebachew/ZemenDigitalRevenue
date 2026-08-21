@@ -13,7 +13,7 @@ jobs:
         with:
           python-version: '3.13'
           cache: pip
-      - run: pip install -r requirements.txt pytest
+      - run: pip install -r requirements.txt pytest pytest-asyncio
       - run: PYTHONPATH=. pytest -q
       - run: python -m compileall -q backend bot database shared workers scripts main.py
 
