@@ -48,6 +48,11 @@ export interface ProductReview {
   first_name: string
 }
 
+export interface ProductTestimonial {
+  username: string
+  text: string
+}
+
 export interface CheckoutStatus {
   order_public_id: string
   order_status: string
@@ -69,6 +74,9 @@ export interface ProductDetail extends ProductSummary {
   faq: unknown[]
   review_count: number
   avg_rating?: string | null
+  purchase_milestone: number
+  community_milestone: number
+  testimonials: ProductTestimonial[]
   media: ProductMedia[]
   reviews: ProductReview[]
   active_checkout?: CheckoutStatus | null

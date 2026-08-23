@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from html import escape
 
+from backend.domain.social_proof import reader_testimonials
 from backend.services.salesman import SalesDetail, SalesPresentation
-
 
 ROLE_REASON_AM = {
     "student": "🎓 ተማሪ እንደሆኑ፣ AI በትምህርትዎ ላይ በቀጥታ ሲያግዝዎ ነው እውነተኛ ዋጋው።",
@@ -54,10 +54,33 @@ def _override_text(content: dict[str, object] | None) -> str | None:
     return str(value) if value else None
 
 
+def social_proof_text(presentation: SalesPresentation) -> str:
+    testimonials = reader_testimonials(presentation.language)
+    if presentation.language == "en":
+        lines = [
+            f"🔥 <b>{presentation.purchase_milestone}+ people bought this</b>",
+            f"👥 <b>{presentation.community_milestone}+ people</b> joined the Zemen community",
+            "",
+            "💬 <b>Reader feedback</b>",
+        ]
+    else:
+        lines = [
+            f"🔥 <b>{presentation.purchase_milestone}+ ሰዎች ገዝተውታል</b>",
+            f"👥 <b>{presentation.community_milestone}+ ሰዎች</b> የZemen ማህበረሰብን ተቀላቅለዋል",
+            "",
+            "💬 <b>የአንባቢዎች አስተያየት</b>",
+        ]
+    lines.extend(
+        f"“{escape(item['text'])}” — <code>{escape(item['username'])}</code>"
+        for item in testimonials
+    )
+    return "\n".join(lines)
+
+
 def pitch_text(p: SalesPresentation) -> str:
     override = _override_text(p.override_hook)
     if override:
-        return override
+        return f"{override}\n\n{social_proof_text(p)}" if p.product_id else override
 
     if not p.product_id or not p.product_title:
         if p.language == "en":
@@ -89,6 +112,7 @@ def pitch_text(p: SalesPresentation) -> str:
             ]
             if desc:
                 lines.append(desc)
+            lines.extend(["", social_proof_text(p)])
             lines.extend(
                 [
                     "",
@@ -106,6 +130,7 @@ def pitch_text(p: SalesPresentation) -> str:
         ]
         if desc:
             lines.append(desc)
+        lines.extend(["", social_proof_text(p)])
         lines.extend(
             [
                 "",
@@ -127,6 +152,7 @@ def pitch_text(p: SalesPresentation) -> str:
         lines.extend(["", obstacle, "", f"📦 <b>{title}</b>"])
         if desc:
             lines.append(desc)
+        lines.extend(["", social_proof_text(p)])
         lines.extend(
             [
                 "",
@@ -147,6 +173,7 @@ def pitch_text(p: SalesPresentation) -> str:
     lines.extend(["", obstacle, "", f"📦 <b>{title}</b>"])
     if desc:
         lines.append(desc)
+    lines.extend(["", social_proof_text(p)])
     lines.extend(
         [
             "",
@@ -162,7 +189,7 @@ def detail_text(detail: SalesDetail, *, kind: str) -> str:
     p = detail.presentation
     override = _override_text(detail.override_content)
     if override:
-        return override
+        return f"{override}\n\n{social_proof_text(p)}"
 
     title = escape(p.product_title or "Zemen Digital")
     price = f"{p.regular_price_br:g}" if p.regular_price_br is not None else None
@@ -171,6 +198,7 @@ def detail_text(detail: SalesDetail, *, kind: str) -> str:
         benefits = list(detail.benefits[:4])
         if p.language == "en":
             lines = [f"👀 <b>Before you buy {title}, judge it from what you actually get:</b>"]
+            lines.extend(["", social_proof_text(p)])
             if benefits:
                 lines.extend(["", *[f"✅ {escape(item)}" for item in benefits]])
             else:
@@ -188,6 +216,7 @@ def detail_text(detail: SalesDetail, *, kind: str) -> str:
             return "\n".join(lines)
 
         lines = [f"👀 <b>{title}ን ከመግዛትዎ በፊት በሚያገኙት ነገር ይፍረዱ፦</b>"]
+        lines.extend(["", social_proof_text(p)])
         if benefits:
             lines.extend(["", *[f"✅ {escape(item)}" for item in benefits]])
         else:
@@ -208,12 +237,14 @@ def detail_text(detail: SalesDetail, *, kind: str) -> str:
     if p.language == "en":
         return (
             "🤔 <b>Fair question.</b>\n\n"
+            f"{social_proof_text(p)}\n\n"
             f"I'm showing you {title} because it lines up with what you told me — your situation, AI experience, goal and obstacle. "
             "Don't buy it just because I said so. Open the preview, compare it with what you need, then decide."
         )
 
     return (
         "🤔 <b>ጥሩ ጥያቄ ነው።</b>\n\n"
+        f"{social_proof_text(p)}\n\n"
         f"{title}ን ያሳየንዎት ከነገሩን — አሁን ያሉበት ሁኔታ፣ AI ልምድዎ፣ ግብዎ እና እንቅፋትዎ — ጋር ስለሚገናኝ ነው። "
         "እኛ ስለነገርንዎ ብቻ አይግዙት። መጀመሪያ ውስጡን ይመልከቱ፤ ከሚፈልጉት ጋር ካልተጣጣመ አይግዙ።"
     )

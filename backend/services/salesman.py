@@ -6,6 +6,7 @@ from typing import Any
 
 from backend.db.pool import Database
 from backend.domain.sales import SalesProfile, audience_keys
+from backend.domain.social_proof import community_milestone, purchase_milestone
 from backend.repositories.events import EventRepository
 from backend.repositories.journeys import JourneyRepository
 from backend.repositories.products import ProductRepository
@@ -45,6 +46,8 @@ class SalesPresentation:
     is_owned: bool = False
     override_hook: dict[str, object] | None = None
     media: tuple[SalesMediaAsset, ...] = ()
+    purchase_milestone: int = 33
+    community_milestone: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,7 +146,19 @@ class SalesmanService:
                     WHERE ent.user_id = u.id
                       AND ent.product_id = cs.focus_product_id
                       AND ent.revoked_at IS NULL
-                ) AS is_owned
+                ) AS is_owned,
+                (
+                    SELECT COUNT(DISTINCT paid_order.id)::int
+                    FROM orders paid_order
+                    JOIN order_items paid_item ON paid_item.order_id = paid_order.id
+                    WHERE paid_item.product_id = cs.focus_product_id
+                      AND paid_order.status = 'paid'
+                ) AS paid_order_count,
+                (
+                    SELECT COUNT(*)::int
+                    FROM users community_user
+                    WHERE community_user.status <> 'deleted'
+                ) AS community_member_count
             FROM users u
             LEFT JOIN user_profiles up ON up.user_id = u.id
             LEFT JOIN conversation_sessions cs ON cs.user_id = u.id
@@ -211,6 +226,10 @@ class SalesmanService:
                 is_owned=bool(row["is_owned"]),
                 override_hook=block if block_key == "sales_hook" else None,
                 media=media,
+                purchase_milestone=purchase_milestone(int(row["paid_order_count"] or 0)),
+                community_milestone=community_milestone(
+                    int(row["community_member_count"] or 0)
+                ),
             ),
             row,
             block,

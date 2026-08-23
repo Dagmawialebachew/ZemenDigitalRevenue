@@ -1,15 +1,20 @@
 from __future__ import annotations
 
+import secrets
 from dataclasses import dataclass
 from decimal import Decimal
 from html import escape
-import secrets
 from typing import Any
 from uuid import UUID
 
 from backend.core.config import Settings
-from backend.domain.policies import policy_document
 from backend.db.pool import Database
+from backend.domain.policies import policy_document
+from backend.domain.social_proof import (
+    community_milestone,
+    purchase_milestone,
+    reader_testimonials,
+)
 from backend.repositories.events import EventRepository
 from backend.repositories.jobs import JobRepository
 from backend.repositories.journeys import JourneyRepository
@@ -25,9 +30,9 @@ from backend.security.miniapp import (
     TelegramMiniAppIdentity,
     validate_telegram_init_data,
 )
+from backend.services.payments import PaymentService
 from shared.deeplinks import StartKind, parse_start_payload
 from workers.models import EnqueueJob
-from backend.services.payments import PaymentService
 
 
 @dataclass(frozen=True, slots=True)
@@ -435,6 +440,11 @@ class MiniAppService:
             "referral_commission_percent": self._money(row["referral_commission_percent"]),
             "review_count": int(row["review_count"] or 0),
             "avg_rating": self._money(row["avg_rating"]),
+            "purchase_milestone": purchase_milestone(int(row["paid_order_count"] or 0)),
+            "community_milestone": community_milestone(
+                int(row["community_member_count"] or 0)
+            ),
+            "testimonials": reader_testimonials(language),
             "media": media,
             "reviews": [
                 {

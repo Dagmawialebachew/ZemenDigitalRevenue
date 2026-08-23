@@ -112,7 +112,19 @@ class StorefrontRepository:
                 offer.expires_at AS offer_expires_at,
                 (ent.user_id IS NOT NULL) AS is_owned,
                 COALESCE(review_stats.review_count, 0) AS review_count,
-                review_stats.avg_rating
+                review_stats.avg_rating,
+                (
+                    SELECT COUNT(DISTINCT o.id)::int
+                    FROM orders o
+                    JOIN order_items oi ON oi.order_id = o.id
+                    WHERE oi.product_id = p.id
+                      AND o.status = 'paid'
+                ) AS paid_order_count,
+                (
+                    SELECT COUNT(*)::int
+                    FROM users community_user
+                    WHERE community_user.status <> 'deleted'
+                ) AS community_member_count
             FROM products p
             LEFT JOIN product_translations pt
                 ON pt.product_id = p.id AND pt.language = $3
