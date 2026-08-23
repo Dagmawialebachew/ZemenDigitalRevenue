@@ -7,7 +7,7 @@ export const ago=(v:string|undefined|null)=>{if(!v)return'—';const d=(Date.now
 export const label=(v:string|undefined|null)=>(v||'—').replaceAll('_',' ').replace(/\b\w/g,m=>m.toUpperCase())
 
 export function Status({value}:{value:string}){const key=value.toLowerCase().replaceAll('_','-');return <span className={`status status--${key}`}><i/>{label(value)}</span>}
-export function Kpi({eyebrow,value,note,icon}:{eyebrow:string;value:ReactNode;note?:ReactNode;icon:IconName}){return <article className="kpi"><div className="kpi__top"><span>{eyebrow}</span><div className="kpi__icon"><Icon name={icon}/></div></div><strong>{value}</strong>{note&&<p>{note}</p>}</article>}
+export function Kpi({eyebrow,value,note,secondary,icon}:{eyebrow:string;value:ReactNode;note?:ReactNode;secondary?:ReactNode;icon:IconName}){return <article className={`kpi${secondary?' kpi--split':''}`}><div className="kpi__top"><span>{eyebrow}</span><div className="kpi__icon"><Icon name={icon}/></div></div><strong>{value}</strong>{note&&<p>{note}</p>}{secondary&&<div className="kpi__secondary">{secondary}</div>}</article>}
 export function Empty({title='Nothing here',text='This queue is clear.'}:{title?:string;text?:string}){return <div className="empty"><div>✓</div><strong>{title}</strong><p>{text}</p></div>}
 export function Loading(){return <div className="loading"><i/><i/><i/></div>}
 export function SectionHead({title,subtitle,action}:{title:string;subtitle?:string;action?:ReactNode}){return <div className="section-head"><div><h2>{title}</h2>{subtitle&&<p>{subtitle}</p>}</div>{action}</div>}

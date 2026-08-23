@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import mimetypes
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -11,8 +12,12 @@ from pydantic import BaseModel, Field
 from backend.core.config import Settings, get_settings
 from backend.repositories.control import ControlRepository
 from backend.security.control import (
-    ControlPrincipal, ControlSessionCodec, csrf_token_for_session, login_fingerprint,
-    require_control_session, verify_owner_key,
+    ControlPrincipal,
+    ControlSessionCodec,
+    csrf_token_for_session,
+    login_fingerprint,
+    require_control_session,
+    verify_owner_key,
 )
 from backend.services.control import ControlService
 from backend.services.payments import PaymentService
@@ -132,7 +137,7 @@ async def me(
 @router.get("/overview")
 async def overview(
     request: Request,
-    days: int = Query(default=14, ge=7, le=90),
+    days: Literal[7, 14, 30, 90] = Query(default=14),
     _: ControlPrincipal = Depends(require_control_session),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, object]:

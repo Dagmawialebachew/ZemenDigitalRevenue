@@ -5,6 +5,7 @@ export type TrendPoint = { day: string; sales: number; revenue: number | string;
 export type Sale = { public_id:string; total_due_br:number|string; pricing_type:string; paid_at:string; first_name:string; username?:string|null; product_title:string; platform?:string|null; campaign?:string|null; creative?:string|null }
 export type Overview = {
   revenue_today_br:number|string; sales_today:number; new_users_today:number; payments_waiting:number;
+  revenue_lifetime_br:number|string; users_lifetime:number; range_days:7|14|30|90;
   revenue_30d_br:number|string; sales_30d:number; full_price_sales_30d:number; discount_sales_30d:number;
   new_users_30d:number; support_waiting:number; deliveries_failed:number; commission_owed_br:number|string;
   conversion_30d:number; trend:TrendPoint[]; funnel:Record<string,number>; recent_sales:Sale[]

@@ -10,10 +10,17 @@ class ControlRepository:
     async def overview(self, conn: asyncpg.Connection, *, days: int = 14) -> dict[str, Any]:
         stats = await conn.fetchrow(
             """
+            WITH bounds AS (
+              SELECT date_trunc(
+                'day', now() AT TIME ZONE 'Africa/Addis_Ababa'
+              ) AT TIME ZONE 'Africa/Addis_Ababa' AS today_start
+            )
             SELECT
-              COALESCE((SELECT sum(total_due_br) FROM orders WHERE status='paid' AND paid_at >= date_trunc('day', now())),0) AS revenue_today_br,
-              (SELECT count(*) FROM orders WHERE status='paid' AND paid_at >= date_trunc('day', now())) AS sales_today,
-              (SELECT count(*) FROM users WHERE created_at >= date_trunc('day', now())) AS new_users_today,
+              COALESCE((SELECT sum(total_due_br) FROM orders, bounds WHERE status='paid' AND paid_at >= bounds.today_start),0) AS revenue_today_br,
+              (SELECT count(*) FROM orders, bounds WHERE status='paid' AND paid_at >= bounds.today_start) AS sales_today,
+              (SELECT count(*) FROM users, bounds WHERE status<>'deleted' AND created_at >= bounds.today_start) AS new_users_today,
+              COALESCE((SELECT sum(total_due_br) FROM orders WHERE status='paid'),0) AS revenue_lifetime_br,
+              (SELECT count(*) FROM users WHERE status<>'deleted') AS users_lifetime,
               (SELECT count(*) FROM payments WHERE status IN ('pending_review','flagged')) AS payments_waiting,
               COALESCE((SELECT sum(total_due_br) FROM orders WHERE status='paid' AND paid_at >= now()-interval '30 days'),0) AS revenue_30d_br,
               (SELECT count(*) FROM orders WHERE status='paid' AND paid_at >= now()-interval '30 days') AS sales_30d,
@@ -27,20 +34,25 @@ class ControlRepository:
         )
         trend = await conn.fetch(
             """
-            WITH days AS (
-              SELECT generate_series(
-                date_trunc('day', now()) - make_interval(days => $1 - 1),
-                date_trunc('day', now()), interval '1 day'
-              ) AS day
+            WITH bounds AS (
+              SELECT (now() AT TIME ZONE 'Africa/Addis_Ababa')::date AS today
+            ), days AS (
+              SELECT (bounds.today - day_offset)::date AS day
+              FROM bounds
+              CROSS JOIN generate_series($1 - 1, 0, -1) AS offsets(day_offset)
             ), sales AS (
-              SELECT date_trunc('day', paid_at) AS day, count(*) AS sales, sum(total_due_br) AS revenue
-              FROM orders
-              WHERE status='paid' AND paid_at >= date_trunc('day', now()) - make_interval(days => $1 - 1)
+              SELECT (paid_at AT TIME ZONE 'Africa/Addis_Ababa')::date AS day,
+                     count(*) AS sales, sum(total_due_br) AS revenue
+              FROM orders, bounds
+              WHERE status='paid'
+                AND paid_at >= (bounds.today - ($1 - 1)) AT TIME ZONE 'Africa/Addis_Ababa'
               GROUP BY 1
             ), joins AS (
-              SELECT date_trunc('day', created_at) AS day, count(*) AS users
-              FROM users
-              WHERE created_at >= date_trunc('day', now()) - make_interval(days => $1 - 1)
+              SELECT (created_at AT TIME ZONE 'Africa/Addis_Ababa')::date AS day,
+                     count(*) AS users
+              FROM users, bounds
+              WHERE status<>'deleted'
+                AND created_at >= (bounds.today - ($1 - 1)) AT TIME ZONE 'Africa/Addis_Ababa'
               GROUP BY 1
             )
             SELECT d.day, COALESCE(s.sales,0) AS sales, COALESCE(s.revenue,0) AS revenue,
@@ -83,6 +95,7 @@ class ControlRepository:
         result = {k: stats[k] for k in stats.keys()}
         new_users = int(result["new_users_30d"] or 0)
         result["conversion_30d"] = round((int(result["sales_30d"] or 0) / new_users * 100), 2) if new_users else 0.0
+        result["range_days"] = max(7, min(days, 90))
         result["trend"] = [dict(r) for r in trend]
         result["funnel"] = {k: int(funnel[k] or 0) for k in funnel.keys()}
         result["recent_sales"] = [dict(r) for r in recent]
