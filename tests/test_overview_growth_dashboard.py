@@ -17,7 +17,20 @@ def test_overview_query_has_lifetime_and_timezone_correct_growth_metrics() -> No
 def test_overview_api_accepts_only_supported_chart_ranges() -> None:
     route = (ROOT / "backend/api/routes/control.py").read_text(encoding="utf-8")
 
-    assert "Literal[7, 14, 30, 90]" in route
+    assert "days: int = Query(default=14)" in route
+    assert "days not in {7, 14, 30, 90}" in route
+    assert "Overview range must be 7, 14, 30, or 90 days" in route
+
+
+def test_control_service_worker_clones_before_async_cache_work() -> None:
+    worker = (ROOT / "dashboard/public/service-worker.js").read_text(encoding="utf-8")
+    html = (ROOT / "dashboard/index.html").read_text(encoding="utf-8")
+
+    assert "zemen-control-shell-v2" in worker
+    assert "const cacheCopy = response.ok ? response.clone() : null" in worker
+    assert "cache.put(request, response.clone())" not in worker
+    assert "cache.put('./', response.clone())" not in worker
+    assert '<meta name="mobile-web-app-capable" content="yes" />' in html
 
 
 def test_overview_keeps_existing_cards_and_adds_lifetime_values() -> None:

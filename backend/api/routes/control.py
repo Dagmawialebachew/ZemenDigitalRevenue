@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import io
 import mimetypes
-from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -137,10 +136,15 @@ async def me(
 @router.get("/overview")
 async def overview(
     request: Request,
-    days: Literal[7, 14, 30, 90] = Query(default=14),
+    days: int = Query(default=14),
     _: ControlPrincipal = Depends(require_control_session),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, object]:
+    if days not in {7, 14, 30, 90}:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Overview range must be 7, 14, 30, or 90 days",
+        )
     return await _service(request, settings).overview(days=days)
 
 

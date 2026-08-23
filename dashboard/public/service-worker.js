@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'zemen-control-shell-v1'
+const CACHE_VERSION = 'zemen-control-shell-v2'
 const APP_SHELL = ['./', './manifest.webmanifest', './icons/zemen-control-192.png', './icons/zemen-control-512.png']
 
 self.addEventListener('install', event => {
@@ -22,8 +22,12 @@ self.addEventListener('fetch', event => {
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
-        .then(response => {
-          if (response.ok) caches.open(CACHE_VERSION).then(cache => cache.put('./', response.clone()))
+        .then(async response => {
+          const cacheCopy = response.ok ? response.clone() : null
+          if (cacheCopy) {
+            const cache = await caches.open(CACHE_VERSION)
+            await cache.put('./', cacheCopy)
+          }
           return response
         })
         .catch(() => caches.match('./')),
@@ -34,8 +38,12 @@ self.addEventListener('fetch', event => {
   if (!['script', 'style', 'image', 'font', 'manifest'].includes(request.destination)) return
   event.respondWith(
     caches.match(request).then(cached => {
-      const fresh = fetch(request).then(response => {
-        if (response.ok) caches.open(CACHE_VERSION).then(cache => cache.put(request, response.clone()))
+      const fresh = fetch(request).then(async response => {
+        const cacheCopy = response.ok ? response.clone() : null
+        if (cacheCopy) {
+          const cache = await caches.open(CACHE_VERSION)
+          await cache.put(request, cacheCopy)
+        }
         return response
       })
       if (cached) {
