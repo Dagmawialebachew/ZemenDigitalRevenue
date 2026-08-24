@@ -105,10 +105,6 @@ export function ProductView({ product, language, checkout, checkoutLoading, onBu
           <span>🔥 {product.purchase_milestone ?? 33}+ {language === 'am' ? 'ሰዎች ገዝተውታል' : 'people bought this'}</span>
           <span>👥 {product.community_milestone ?? 180}+ {language === 'am' ? 'የZemen ማህበሰብ አባላት' : 'in the Zemen community'}</span>
         </div>
-        {(product.testimonials?.length ?? 0) > 0 && <div className="testimonial-strip">
-          <strong>{language === 'am' ? '💬 የአንባቢዎች አስተያየት' : '💬 Reader feedback'}</strong>
-          <div>{product.testimonials?.map(item => <article key={item.username}><p>“{item.text}”</p><small>{item.username}</small></article>)}</div>
-        </div>}
         <div className="description">{description.map((paragraph, i) => <p key={i}>{paragraph}</p>)}</div>
         <div className="detail-price">
           <div>{product.has_offer && <span>{c.regularPrice} · <s>{product.regular_price_br} Br</s></span>}<strong>{product.display_price_br} <small>Br</small></strong></div>

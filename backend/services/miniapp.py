@@ -13,7 +13,6 @@ from backend.domain.policies import policy_document
 from backend.domain.social_proof import (
     community_milestone,
     purchase_milestone,
-    reader_testimonials,
 )
 from backend.repositories.events import EventRepository
 from backend.repositories.jobs import JobRepository
@@ -444,7 +443,6 @@ class MiniAppService:
             "community_milestone": community_milestone(
                 int(row["community_member_count"] or 0)
             ),
-            "testimonials": reader_testimonials(language),
             "media": media,
             "reviews": [
                 {

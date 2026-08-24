@@ -2,7 +2,6 @@ from backend.domain.sales import SalesProfile
 from backend.domain.social_proof import (
     community_milestone,
     purchase_milestone,
-    reader_testimonials,
 )
 from backend.services.salesman import SalesPresentation
 from bot.services.sales_copy import social_proof_text
@@ -19,20 +18,6 @@ def test_community_milestone_never_rounds_up() -> None:
     assert community_milestone(187) == 180
     assert community_milestone(200) == 200
     assert community_milestone(7) == 7
-
-
-def test_testimonials_are_short_masked_and_localized() -> None:
-    english = reader_testimonials("en")
-    amharic = reader_testimonials("am")
-
-    assert len(english) == len(amharic) == 4
-    assert [item["username"] for item in english] == [
-        item["username"] for item in amharic
-    ]
-    assert all("***" in item["username"] for item in english)
-    assert all(len(item["text"]) <= 30 for item in english)
-    assert all(len(item["text"]) <= 30 for item in amharic)
-    assert [item["text"] for item in english] != [item["text"] for item in amharic]
 
 
 def test_bot_social_proof_matches_the_users_language() -> None:
@@ -54,8 +39,8 @@ def test_bot_social_proof_matches_the_users_language() -> None:
     english = social_proof_text(presentation)
     assert "33+ people bought this" in english
     assert "180+ people" in english
-    assert "Simple and practical." in english
-    assert "@Ber***sg" in english
+    assert "Reader feedback" not in english
+    assert "@Ber***sg" not in english
 
     amharic = social_proof_text(
         SalesPresentation(
@@ -74,4 +59,4 @@ def test_bot_social_proof_matches_the_users_language() -> None:
         )
     )
     assert "33+ ሰዎች ገዝተውታል" in amharic
-    assert "ቀላልና ተግባራዊ ነው።" in amharic
+    assert "የአንባቢዎች አስተያየት" not in amharic

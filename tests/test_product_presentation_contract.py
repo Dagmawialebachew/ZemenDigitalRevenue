@@ -63,15 +63,16 @@ def test_miniapp_uses_a_visible_gallery_and_readable_description() -> None:
     assert "media-counter" in view
 
 
-def test_social_proof_is_visible_in_both_sales_surfaces() -> None:
+def test_social_proof_keeps_counts_without_short_testimonials() -> None:
     view = (ROOT / "miniapp/src/views/ProductView.tsx").read_text(encoding="utf-8")
     bot_copy = (ROOT / "bot/services/sales_copy.py").read_text(encoding="utf-8")
 
     assert "social-proof" in view
-    assert "testimonial-strip" in view
-    assert "product.testimonials" in view
     assert "social_proof_text" in bot_copy
-    assert "reader_testimonials" in bot_copy
+    assert "testimonial-strip" not in view
+    assert "product.testimonials" not in view
+    assert "Reader feedback" not in bot_copy
+    assert "@Ber***sg" not in bot_copy
 
 
 def test_sample_pdf_uses_telegram_external_link_handling() -> None:

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from html import escape
 
-from backend.domain.social_proof import reader_testimonials
 from backend.services.salesman import SalesDetail, SalesPresentation
 
 ROLE_REASON_AM = {
@@ -55,26 +54,19 @@ def _override_text(content: dict[str, object] | None) -> str | None:
 
 
 def social_proof_text(presentation: SalesPresentation) -> str:
-    testimonials = reader_testimonials(presentation.language)
     if presentation.language == "en":
-        lines = [
-            f"🔥 <b>{presentation.purchase_milestone}+ people bought this</b>",
-            f"👥 <b>{presentation.community_milestone}+ people</b> joined the Zemen community",
-            "",
-            "💬 <b>Reader feedback</b>",
-        ]
-    else:
-        lines = [
+        return "\n".join(
+            [
+                f"🔥 <b>{presentation.purchase_milestone}+ people bought this</b>",
+                f"👥 <b>{presentation.community_milestone}+ people</b> joined the Zemen community",
+            ]
+        )
+    return "\n".join(
+        [
             f"🔥 <b>{presentation.purchase_milestone}+ ሰዎች ገዝተውታል</b>",
             f"👥 <b>{presentation.community_milestone}+ ሰዎች</b> የZemen ማህበረሰብን ተቀላቅለዋል",
-            "",
-            "💬 <b>የአንባቢዎች አስተያየት</b>",
         ]
-    lines.extend(
-        f"“{escape(item['text'])}” — <code>{escape(item['username'])}</code>"
-        for item in testimonials
     )
-    return "\n".join(lines)
 
 
 def pitch_text(p: SalesPresentation) -> str:
