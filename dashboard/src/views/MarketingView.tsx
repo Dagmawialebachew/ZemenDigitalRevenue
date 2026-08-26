@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
-import type { Automation, Broadcast, DiscountRule, MarketingDashboard, MarketingProduct, ReferralPartner } from '../api/types'
+import type { Automation, Broadcast, DiscountRule, MarketingDashboard, MarketingProduct, ReferralPartner, RecoveryCampaignPreview, RecoveryCampaignLaunchResult } from '../api/types'
 import { Icon } from '../components/Icon'
 import { Empty, Kpi, Modal, SectionHead, Status, dt, money } from '../components/UI'
 
@@ -43,7 +43,206 @@ function BroadcastEditor({products,existing,onClose,onDone}:{products:MarketingP
  return <Modal title={existing?'Edit broadcast':'New broadcast'} onClose={onClose}><div className="marketing-editor"><label>Internal name<input className="field" value={name} onChange={e=>setName(e.target.value)} placeholder="A03 non-buyer follow-up"/></label><AudienceFields products={products} kind={kind} setKind={setKind} language={language} setLanguage={setLanguage} product={product} setProduct={setProduct} score={score} setScore={setScore}/><div className="audience-preview"><button className="btn" onClick={()=>void preview()}>Preview audience</button><span>{count===null?'Count before sending':`${count.toLocaleString()} reachable users`}</span></div><div className="language-copy-grid"><label>🇪🇹 Amharic<textarea className="field textarea textarea--lg" value={amText} onChange={e=>setAmText(e.target.value)} placeholder="Message…"/></label><label>🇬🇧 English<textarea className="field textarea textarea--lg" value={enText} onChange={e=>setEnText(e.target.value)} placeholder="Message…"/></label></div><div className="marketing-form-grid"><label>Button label<input className="field" value={buttonText} onChange={e=>setButtonText(e.target.value)}/></label><label>Button destination<input className="field" value={buttonUrl} onChange={e=>setButtonUrl(e.target.value)} placeholder="https://t.me/..."/></label><label>Schedule<input className="field" type="datetime-local" value={schedule} onChange={e=>setSchedule(e.target.value)}/></label><label className="broadcast-upload">Media{media?<span>✓ {media.type}</span>:<span>Optional</span>}<input type="file" hidden onChange={e=>void upload(e.target.files?.[0]||null)}/><button className="btn" type="button" onClick={e=>(e.currentTarget.parentElement?.querySelector('input') as HTMLInputElement|null)?.click()}>Upload media</button></label></div>{error&&<p className="form-error">{error}</p>}<div className="modal-actions"><button className="btn" onClick={()=>void save()} disabled={busy}>{busy?'Working…':'Save draft'}</button><button className="btn btn--green" onClick={()=>void saveAndSend()} disabled={busy}>{schedule?'Schedule broadcast':'Send now'}</button></div></div></Modal>
 }
 
-function Broadcasts({data,reload}:{data:MarketingDashboard;reload:()=>Promise<void>}){const[open,setOpen]=useState<Broadcast|boolean>(false);return <div className="marketing-pane"><SectionHead title="Broadcast Studio" subtitle="Choose the audience, write once, preview the reach and send without touching code." action={<button className="btn btn--green" onClick={()=>setOpen(true)}>+ New broadcast</button>}/>{data.broadcasts.length?<div className="marketing-card-grid">{data.broadcasts.map(b=><article className="marketing-card" key={b.id}><div className="marketing-card__top"><div><span className="micro">{dt(b.created_at)}</span><h3>{b.name}</h3></div><Status value={b.status}/></div><div className="marketing-metrics"><div><span>Audience</span><b>{Number(b.recipients||b.audience_snapshot_count).toLocaleString()}</b></div><div><span>Sent</span><b>{Number(b.sent_count).toLocaleString()}</b></div><div><span>Clicks</span><b>{Number(b.clickers).toLocaleString()}</b></div><div><span>Sales</span><b>{Number(b.conversions).toLocaleString()}</b></div></div><div className="marketing-card__revenue"><div><span>Attributed revenue</span><strong>{money(b.revenue_br)}</strong></div><small>{Number(b.blocked_count||0).toLocaleString()} blocked · {Number(b.failed_count||0).toLocaleString()} failed</small></div><div className="card-actions">{['draft','scheduled'].includes(b.status)&&<button className="btn btn--small" onClick={()=>setOpen(b)}>Edit</button>}{b.status==='draft'&&<button className="btn btn--green btn--small" onClick={async()=>{await api.scheduleBroadcast(b.id,null);await reload()}}>Send now</button>}{['scheduled','sending'].includes(b.status)&&<button className="btn btn--danger-quiet btn--small" onClick={async()=>{await api.cancelBroadcast(b.id);await reload()}}>Cancel</button>}</div></article>)}</div>:<Empty title="No broadcasts yet" text="Create a targeted Telegram campaign from here."/>}{open&&<BroadcastEditor products={data.products} existing={typeof open==='object'?open:undefined} onClose={()=>setOpen(false)} onDone={reload}/>}</div>}
+function RecoveryCampaignStudio({products,onClose,onDone}:{products:MarketingProduct[];onClose:()=>void;onDone:()=>Promise<void>}){
+ const[selectedProduct,setSelectedProduct]=useState(products.find(p=>p.slug==='ai-kezero')?.id||products.find(p=>p.discounts_enabled)?.id||products[0]?.id||'')
+ const[targetPrice,setTargetPrice]=useState('299')
+ const[preview,setPreview]=useState<RecoveryCampaignPreview|null>(null)
+ const[loadingPreview,setLoadingPreview]=useState(true)
+ const[media,setMedia]=useState<{type:string;file_id:string}|null>(null)
+ const[localImageUrl,setLocalImageUrl]=useState<string>('')
+ const[activeStage,setActiveStage]=useState<string>('blast_1a')
+ const[activeLang,setActiveLang]=useState<'am'|'en'>('am')
+ const[busy,setBusy]=useState(false)
+ const[uploading,setUploading]=useState(false)
+ const[error,setError]=useState('')
+ const[success,setSuccess]=useState<RecoveryCampaignLaunchResult|null>(null)
+
+ useEffect(()=>{
+  let live=true
+  setLoadingPreview(true)
+  api.recoveryCampaignPreview(selectedProduct)
+   .then(res=>{if(live)setPreview(res)})
+   .catch(err=>{if(live)setError(err instanceof Error?err.message:'Could not load campaign preview')})
+   .finally(()=>{if(live)setLoadingPreview(false)})
+  return ()=>{live=false}
+ },[selectedProduct])
+
+ const uploadImage=async(file:File|null)=>{
+  if(!file)return
+  setError('')
+  setUploading(true)
+  try{
+   setLocalImageUrl(URL.createObjectURL(file))
+   const form=new FormData()
+   form.append('file',file)
+   const res=await api.uploadBroadcastMedia(form)
+   setMedia({type:res.type,file_id:res.file_id})
+  }catch(err){
+   setError(err instanceof Error?err.message:'Image upload failed')
+  }finally{
+   setUploading(false)
+  }
+ }
+
+ const launch=async()=>{
+  setBusy(true)
+  setError('')
+  try{
+   const res=await api.launchRecoveryCampaign({
+    product_id:selectedProduct||undefined,
+    media_file_id:media?.file_id||undefined,
+    media_type:media?.type||'photo',
+    target_price_br:targetPrice,
+   })
+   setSuccess(res)
+   await onDone()
+  }catch(err){
+   setError(err instanceof Error?err.message:'Failed to launch campaign')
+  }finally{
+   setBusy(false)
+  }
+ }
+
+ const curStage=preview?.stages.find(s=>s.stage_key===activeStage)||preview?.stages[0]
+
+ return (
+  <Modal title="⚡ Today-Only Recovery Campaign Studio" onClose={onClose}>
+   <div className="marketing-editor recovery-studio">
+    {success?(
+     <div className="campaign-success-card">
+      <div className="success-icon">🚀</div>
+      <h3>Campaign Launched Successfully!</h3>
+      <p><b>{success.offers_created} customer offers</b> created at <b>{money(success.product.offer_price_br)}</b>.</p>
+      <p className="muted-copy">4 staged broadcasts scheduled. Expiration locked to <b>Midnight EAT</b> ({dt(success.expires_at)}).</p>
+      <div className="broadcast-schedule-summary">
+       {success.broadcasts.map(b=>(
+        <div key={b.id} className="timeline-row">
+         <i/>
+         <div>
+          <b>{b.name}</b>
+          <span>Scheduled for {dt(b.scheduled_at)} · {b.recipients} recipients</span>
+         </div>
+        </div>
+       ))}
+      </div>
+      <div className="modal-actions" style={{marginTop:'20px'}}>
+       <button className="btn btn--green" onClick={onClose}>Close Studio</button>
+      </div>
+     </div>
+    ):(
+     <>
+      <div className="campaign-studio-header">
+       <div className="campaign-summary-chips">
+        <span className="chip chip--emerald">Price Anchor: {preview?`${preview.product.regular_price_br} Br ➜ ${targetPrice} Br`:'549 Br ➜ 299 Br'}</span>
+        <span className="chip chip--orange">⏰ {preview?.deadline.hours_remaining??'—'}h left today</span>
+        <span className="chip chip--blue">👥 {preview?.audience.non_buyers_count??0} Non-Buyers</span>
+        <span className="chip chip--purple">🎯 {preview?.audience.high_intent_count??0} High-Intent</span>
+       </div>
+      </div>
+
+      <div className="marketing-form-grid" style={{marginTop:'14px'}}>
+       <label>Target Product<ProductSelect products={products} value={selectedProduct} onChange={setSelectedProduct} required/></label>
+       <label>Offer Price (Br)<input className="field" type="number" value={targetPrice} onChange={e=>setTargetPrice(e.target.value)}/></label>
+      </div>
+
+      <div className="studio-media-box">
+       <label className="studio-upload-label">
+        <span>📷 Campaign Promo Image (Custom Broadcast Banner)</span>
+        <div className="upload-dropzone">
+         {localImageUrl?(
+          <div className="image-preview-wrapper">
+           <img src={localImageUrl} alt="Uploaded promo" className="campaign-preview-thumb"/>
+           <div className="image-upload-status">
+            {uploading?<span className="chip chip--orange">Uploading to Telegram…</span>:media?<span className="chip chip--emerald">✓ Ready on Telegram</span>:null}
+            <button type="button" className="btn btn--small" onClick={()=>{setMedia(null);setLocalImageUrl('')}}>Change Image</button>
+           </div>
+          </div>
+         ):(
+          <div className="upload-cta" onClick={e=>(e.currentTarget.querySelector('input') as HTMLInputElement|null)?.click()}>
+           <input type="file" accept="image/*" onChange={e=>void uploadImage(e.target.files?.[0]||null)}/>
+           <p><b>Choose your promo image</b> (or click to upload)</p>
+           <small>Dark emerald / 3:2 aspect ratio recommended</small>
+          </div>
+         )}
+        </div>
+       </label>
+      </div>
+
+      <div className="campaign-drip-preview">
+       <div className="stage-selector-tabs">
+        {preview?.stages.map(s=>(
+         <button
+          key={s.stage_key}
+          type="button"
+          className={`stage-pill ${activeStage===s.stage_key?'active':''}`}
+          onClick={()=>setActiveStage(s.stage_key)}
+         >
+          {s.stage_key==='blast_1a'&&'Blast 1A (High Intent · NOW)'}
+          {s.stage_key==='blast_1b'&&'Blast 1B (All · +5m)'}
+          {s.stage_key==='blast_2'&&'Blast 2 (Reminder · 8 PM)'}
+          {s.stage_key==='blast_3'&&'Blast 3 (Final · 11 PM)'}
+         </button>
+        ))}
+       </div>
+
+       <div className="lang-toggle-bar">
+        <button type="button" className={`btn btn--small ${activeLang==='am'?'btn--green':''}`} onClick={()=>setActiveLang('am')}>🇪🇹 Amharic Preview</button>
+        <button type="button" className={`btn btn--small ${activeLang==='en'?'btn--green':''}`} onClick={()=>setActiveLang('en')}>🇬🇧 English Preview</button>
+       </div>
+
+       {curStage&&(
+        <div className="telegram-message-preview">
+         <div className="tg-bubble">
+          {localImageUrl&&<img src={localImageUrl} alt="Promo" className="tg-bubble-media"/>}
+          <pre className="tg-text">{activeLang==='am'?curStage.text_am:curStage.text_en}</pre>
+          <div className="tg-button-row">
+           <div className="tg-inline-btn">{activeLang==='am'?curStage.button_am:curStage.button_en}</div>
+          </div>
+         </div>
+        </div>
+       )}
+      </div>
+
+      <div className="locked-rule" style={{marginTop:'14px'}}>
+       <span>COMMERCIAL INVARIANT GUARANTEE</span>
+       <b>0 Br Referral Commission · Automatic Midnight Expiration · Bot Checkout Linking</b>
+       <p>Discount orders are strictly non-commissionable. Bulk offers are dynamically stamped in PostgreSQL with transactional safety.</p>
+      </div>
+
+      {error&&<p className="form-error">{error}</p>}
+
+      <div className="modal-actions" style={{marginTop:'18px'}}>
+       <button className="btn" type="button" onClick={onClose} disabled={busy}>Cancel</button>
+       <button className="btn btn--green" type="button" onClick={()=>void launch()} disabled={busy||uploading||loadingPreview||!preview}>
+        {busy?'Launching 4-Stage Campaign…':'🚀 Confirm & Launch Campaign'}
+       </button>
+      </div>
+     </>
+    )}
+   </div>
+  </Modal>
+ )
+}
+
+function Broadcasts({data,reload}:{data:MarketingDashboard;reload:()=>Promise<void>}){
+ const[open,setOpen]=useState<Broadcast|boolean>(false)
+ const[campaignStudio,setCampaignStudio]=useState(false)
+ return <div className="marketing-pane">
+  <SectionHead
+   title="Broadcast Studio"
+   subtitle="Choose the audience, write once, preview the reach and send without touching code."
+   action={
+    <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+     <button className="btn btn--highlight" onClick={()=>setCampaignStudio(true)}>⚡ Launch 299 Br Campaign</button>
+     <button className="btn btn--green" onClick={()=>setOpen(true)}>+ New broadcast</button>
+    </div>
+   }
+  />
+  {data.broadcasts.length?<div className="marketing-card-grid">{data.broadcasts.map(b=><article className="marketing-card" key={b.id}><div className="marketing-card__top"><div><span className="micro">{dt(b.created_at)}</span><h3>{b.name}</h3></div><Status value={b.status}/></div><div className="marketing-metrics"><div><span>Audience</span><b>{Number(b.recipients||b.audience_snapshot_count).toLocaleString()}</b></div><div><span>Sent</span><b>{Number(b.sent_count).toLocaleString()}</b></div><div><span>Clicks</span><b>{Number(b.clickers).toLocaleString()}</b></div><div><span>Sales</span><b>{Number(b.conversions).toLocaleString()}</b></div></div><div className="marketing-card__revenue"><div><span>Attributed revenue</span><strong>{money(b.revenue_br)}</strong></div><small>{Number(b.blocked_count||0).toLocaleString()} blocked · {Number(b.failed_count||0).toLocaleString()} failed</small></div><div className="card-actions">{['draft','scheduled'].includes(b.status)&&<button className="btn btn--small" onClick={()=>setOpen(b)}>Edit</button>}{b.status==='draft'&&<button className="btn btn--green btn--small" onClick={async()=>{await api.scheduleBroadcast(b.id,null);await reload()}}>Send now</button>}{['scheduled','sending'].includes(b.status)&&<button className="btn btn--danger-quiet btn--small" onClick={async()=>{await api.cancelBroadcast(b.id);await reload()}}>Cancel</button>}</div></article>)}</div>:<Empty title="No broadcasts yet" text="Create a targeted Telegram campaign from here."/>}
+  {open&&<BroadcastEditor products={data.products} existing={typeof open==='object'?open:undefined} onClose={()=>setOpen(false)} onDone={reload}/>}
+  {campaignStudio&&<RecoveryCampaignStudio products={data.products} onClose={()=>setCampaignStudio(false)} onDone={reload}/>}
+ </div>
+}
 
 function AutomationEditor({products,existing,onClose,onDone}:{products:MarketingProduct[];existing?:Automation;onClose:()=>void;onDone:()=>Promise<void>}){
  const[name,setName]=useState(existing?.name||'Recovery · product viewed')

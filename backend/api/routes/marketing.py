@@ -100,6 +100,13 @@ class PayoutPaid(BaseModel):
     note: str | None = Field(default=None, max_length=1000)
 
 
+class RecoveryCampaignLaunch(BaseModel):
+    product_id: UUID | None = None
+    media_file_id: str | None = None
+    media_type: str = "photo"
+    target_price_br: str = "299.00"
+
+
 @router.get("")
 async def marketing_dashboard(
     request: Request,
@@ -244,3 +251,33 @@ async def create_payout(payload: PayoutCreate, request: Request, principal: Cont
 async def payout_paid(payout_id: UUID, payload: PayoutPaid, request: Request, principal: ControlPrincipal = Depends(require_control_session), settings: Settings = Depends(get_settings)):
     try: return await _service(request, settings).mark_payout_paid(payout_id=payout_id, admin_telegram_id=principal.telegram_id, note=payload.note)
     except Exception as exc: raise _error(exc) from None
+
+
+@router.get("/campaigns/recovery-preview")
+async def get_recovery_campaign_preview(
+    request: Request,
+    product_id: UUID | None = None,
+    _: ControlPrincipal = Depends(require_control_session),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    try:
+        return await _service(request, settings).preview_recovery_campaign(product_id=product_id)
+    except Exception as exc:
+        raise _error(exc) from None
+
+
+@router.post("/campaigns/launch-recovery")
+async def launch_recovery_campaign(
+    payload: RecoveryCampaignLaunch,
+    request: Request,
+    principal: ControlPrincipal = Depends(require_control_session),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    try:
+        return await _service(request, settings).launch_full_recovery_campaign(
+            admin_telegram_id=principal.telegram_id,
+            data=payload.model_dump(mode="json"),
+        )
+    except Exception as exc:
+        raise _error(exc) from None
+

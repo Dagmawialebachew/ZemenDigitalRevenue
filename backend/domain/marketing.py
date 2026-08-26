@@ -190,3 +190,116 @@ def clean_automation_steps(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "config": config,
         })
     return result
+
+
+def get_recovery_campaign_templates(
+    *,
+    product_title_am: str = "AI ከዜሮ",
+    product_title_en: str = "AI From Zero",
+    regular_price_br: str | int | float = "549",
+    offer_price_br: str | int | float = "299",
+    bot_url: str = "",
+    media: dict[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    """Generates the 4 standardized recovery campaign stages with Amharic & English copy."""
+    reg = str(regular_price_br)
+    off = str(offer_price_br)
+
+    def _wrap(text: str, button_text: str) -> dict[str, Any]:
+        buttons = [{"key": "primary_buy", "text": button_text, "url": bot_url}] if bot_url else []
+        payload: dict[str, Any] = {"text": text.strip(), "buttons": buttons}
+        if media:
+            payload["media"] = media
+        return payload
+
+    return [
+        {
+            "stage_key": "blast_1a",
+            "name": f"299 Recovery — Blast 1A High Intent",
+            "audience": {"kind": "high_intent"},
+            "relative_delay_minutes": 0,
+            "content_am": _wrap(
+                f"{{first_name}}፣ ያኔ ለመግዛት ተቃርበው ነበር...\n\n"
+                f"ዛሬ ልዩ ነገር ስላለ ነው 👇\n\n"
+                f"{product_title_am} — {reg} ብር ➜ {off} ብር ብቻ!\n\n"
+                f"ይህ ዋጋ ዛሬ ማታ 6 ሰአት ላይ ያበቃል። ከዚያ በኋላ {reg} ብር ይመለሳል። ልዩ ሁኔታ የለም።\n\n"
+                f"ቀድሞ ነው ጊዜን ያሳለፉት። ቀድሞ ነው ያዩት። አሁን ውሳኔ ብቻ ይቀራል።\n\n"
+                f"ከ6 ወር በኋላ ምንም ካልተለወጠ — ማለትም ዛሬ ያመለጠ ማለት ነው።",
+                f"🔥 አሁን ይግዙ — {off} ብር",
+            ),
+            "content_en": _wrap(
+                f"{{first_name}}, you were SO close to getting this...\n\n"
+                f"Today something special just dropped 👇\n\n"
+                f"{product_title_en} — {reg} Br ➜ Only {off} Br!\n\n"
+                f"This price DIES tonight at midnight. After that, it's {reg} Br. No exceptions.\n\n"
+                f"You already spent the time. You already saw the value. The only thing missing is your decision.\n\n"
+                f"6 months from now, if nothing changed — it's because of this moment right here.",
+                f"🔥 Get It Now — {off} Br",
+            ),
+        },
+        {
+            "stage_key": "blast_1b",
+            "name": f"299 Recovery — Blast 1B All Non-Buyers",
+            "audience": {"kind": "non_buyers"},
+            "relative_delay_minutes": 5,
+            "content_am": _wrap(
+                f"{{first_name}}፣ ይህን ማወቅ አለብዎት...\n\n"
+                f"በዚህ ሳምንት ብቻ 52+ ሰዎች {product_title_am} ገዝተዋል። ከእነሱ ጋር ለምን አልተቀላቀሉም?\n\n"
+                f"ዛሬ ብቻ — {off} ብር (ከ{reg} ብር ይልቅ)\n\n"
+                f"ሁሉም ሰው AI እየተማረ ነው። ኢትዮጵያ ውስጥ AI ለሥራ፣ ለንግድ፣ ለትምህርት — ሁሉም እየተጠቀመ ነው።\n\n"
+                f"ጥያቄው ይህ ነው: ይቀራሉ ወይስ ይቀላቀላሉ?\n\n"
+                f"ዋጋው ዛሬ ማታ 6 ሰአት ላይ ያበቃል ⏰",
+                f"🔥 አሁን ተቀላቀሉ — {off} ብር",
+            ),
+            "content_en": _wrap(
+                f"{{first_name}}, you need to know this...\n\n"
+                f"52+ people bought {product_title_en} just this week. Why aren't you one of them?\n\n"
+                f"TODAY ONLY — {off} Br (instead of {reg} Br)\n\n"
+                f"Everyone is learning AI. In Ethiopia, AI for work, business, education — everyone is using it now.\n\n"
+                f"The question is: are you going to be left behind, or are you joining?\n\n"
+                f"Price expires tonight at midnight ⏰",
+                f"🔥 Join Now — {off} Br",
+            ),
+        },
+        {
+            "stage_key": "blast_2",
+            "name": f"299 Recovery — Blast 2 Reminder",
+            "audience": {"kind": "non_buyers"},
+            "relative_delay_minutes": 240,  # 4 hours
+            "content_am": _wrap(
+                f"{{first_name}}... ገና 4 ሰዓት ብቻ ይቀራል ⏰\n\n"
+                f"{product_title_am} — {off} ብር\n\n"
+                f"ይህ ቀልድ አይደለም። ማታ 6 ሰአት = {reg} ብር ይመለሳል።\n\n"
+                f"ቀድሞ ይጠቀሙ 👇",
+                f"⏰ {off} ብር — ከማለፉ በፊት",
+            ),
+            "content_en": _wrap(
+                f"{{first_name}}... Only 4 hours left ⏰\n\n"
+                f"{product_title_en} — {off} Br\n\n"
+                f"This is not a joke. Midnight = back to {reg} Br.\n\n"
+                f"Get it before it's gone 👇",
+                f"⏰ {off} Br — Before It's Gone",
+            ),
+        },
+        {
+            "stage_key": "blast_3",
+            "name": f"299 Recovery — Blast 3 Final Warning",
+            "audience": {"kind": "non_buyers"},
+            "relative_delay_minutes": 420,  # 7 hours
+            "content_am": _wrap(
+                f"⚠️ {{first_name}} — 1 ሰዓት ብቻ!\n\n"
+                f"{off} ብር ➜ ማታ 6 ሰአት ላይ ያበቃል\n\n"
+                f"ከዚያ {reg} ብር ይሆናል። ያ ውሳኔ የእርስዎ ነው።\n\n"
+                f"የመጨረሻ ዕድል 👇",
+                f"🚨 የመጨረሻ ዕድል — {off} ብር",
+            ),
+            "content_en": _wrap(
+                f"⚠️ {{first_name}} — 1 HOUR LEFT!\n\n"
+                f"{off} Br ➜ EXPIRES at midnight\n\n"
+                f"After that it's {reg} Br. That decision is yours.\n\n"
+                f"Last chance 👇",
+                f"🚨 Last Chance — {off} Br",
+            ),
+        },
+    ]
+

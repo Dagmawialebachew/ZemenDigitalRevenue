@@ -60,6 +60,34 @@ export type AutomationStep = { id?:string; step_key:string; sort_order:number; s
 export type DiscountRule = { id:string; product_id:string; product_title:string; name:string; rule_type:string; target_price_br:number|string; regular_price_br:number|string; eligibility_delay_seconds:number; expires_after_seconds?:number|null; is_active:boolean; require_no_pending_payment:boolean; minimum_intent_score:number; live_offers:number; redeemed_offers:number; revision:number }
 export type CustomerOffer = { id:string; status:string; original_price_br:number|string; offer_price_br:number|string; starts_at?:string|null; expires_at?:string|null; created_at:string; telegram_id:number; first_name:string; username?:string|null; product_title:string; rule_name?:string|null }
 export type TrackingLink = { id:string; token:string; label?:string|null; product_id?:string|null; product_title?:string|null; source:string; platform?:string|null; campaign?:string|null; ad_set?:string|null; creative?:string|null; angle?:string|null; language_hint?:string|null; is_active:boolean; starts:number; purchases:number; revenue_br:number|string; bot_url?:string; created_at:string }
+export type RecoveryCampaignStage = {
+  stage_key:string;
+  name:string;
+  audience_kind:string;
+  relative_delay_minutes:number;
+  text_am:string;
+  text_en:string;
+  button_am:string;
+  button_en:string;
+}
+
+export type RecoveryCampaignPreview = {
+  product:{ id:string; title:string; regular_price_br:string|number; offer_price_br:string|number };
+  audience:{ non_buyers_count:number; high_intent_count:number };
+  deadline:{ hours_remaining:number; expires_at:string };
+  stages:RecoveryCampaignStage[];
+}
+
+export type RecoveryCampaignLaunchResult = {
+  success:boolean;
+  product:{ id:string; title:string; regular_price_br:string|number; offer_price_br:string|number };
+  offers_created:number;
+  rule_id:string;
+  tracking_url:string;
+  expires_at:string;
+  broadcasts:Array<{ id:string; name:string; scheduled_at:string; recipients:number }>;
+}
+
 export type ReferralPartner = { id:string; code:string; user_id:string; telegram_id:number; first_name:string; username?:string|null; payout_method?:string|null; payout_destination?:string|null; account_name?:string|null; joins:number; paid_referrals:number; owed_br:number|string; available_br:number|string; paid_br:number|string }
 export type ReferralPayout = { id:string; referrer_user_id:string; amount_br:number|string; payout_method:string; payout_destination:string; status:string; note?:string|null; created_at:string; processed_at?:string|null; telegram_id:number; first_name:string; username?:string|null; commission_count:number }
 export type MarketingDashboard = { overview:{active_broadcasts:number;active_automations:number;live_offers:number;active_ad_links:number;commission_owed_br:number|string;commission_available_br:number|string;referral_partners:number;broadcasts_30d:number;broadcast_revenue_30d_br:number|string}; products:MarketingProduct[]; broadcasts:Broadcast[]; automations:Automation[]; discount_rules:DiscountRule[]; offers:CustomerOffer[]; links:TrackingLink[]; referrals:{summary:Record<string,number|string>;partners:ReferralPartner[];payouts:ReferralPayout[]} }

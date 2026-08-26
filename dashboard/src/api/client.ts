@@ -1,4 +1,4 @@
-import type { Admin, Alert, AuthResponse, Customer, CustomersResponse, CustomerDetail, Delivery, Order, Overview, Payment, Product, ProductDetail, ProductMedia, ProductFile, ProductRelationship, ProductTranslation, SupportCase, SupportThread, MarketingDashboard, AutomationStep, AnalyticsDashboard, FinancialDashboard, ReviewItem, SettingsBundle } from './types'
+import type { Admin, Alert, AuthResponse, Customer, CustomersResponse, CustomerDetail, Delivery, Order, Overview, Payment, Product, ProductDetail, ProductMedia, ProductFile, ProductRelationship, ProductTranslation, SupportCase, SupportThread, MarketingDashboard, AutomationStep, AnalyticsDashboard, FinancialDashboard, ReviewItem, SettingsBundle, RecoveryCampaignPreview, RecoveryCampaignLaunchResult } from './types'
 
 const base = ((import.meta.env.VITE_API_BASE as string | undefined) || '').replace(/\/$/, '')
 let csrfToken = ''
@@ -77,6 +77,8 @@ export const api = {
   resolveAlert: (id:string) => request(`/api/control/alerts/${id}/resolve`,{method:'POST'}),
 
   marketing: () => request<MarketingDashboard>('/api/control/marketing'),
+  recoveryCampaignPreview: (productId?:string) => request<RecoveryCampaignPreview>(`/api/control/marketing/campaigns/recovery-preview${q({product_id:productId})}`),
+  launchRecoveryCampaign: (payload:{product_id?:string;media_file_id?:string;media_type?:string;target_price_br?:string}) => request<RecoveryCampaignLaunchResult>('/api/control/marketing/campaigns/launch-recovery',{method:'POST',body:JSON.stringify(payload)}),
   audienceCount: (audience_definition:Record<string,unknown>) => request<{count:number}>('/api/control/marketing/audience/count',{method:'POST',body:JSON.stringify({audience_definition})}),
   createBroadcast: (payload:Record<string,unknown>) => request('/api/control/marketing/broadcasts',{method:'POST',body:JSON.stringify(payload)}),
   updateBroadcast: (id:string,payload:Record<string,unknown>) => request(`/api/control/marketing/broadcasts/${id}`,{method:'PATCH',body:JSON.stringify(payload)}),

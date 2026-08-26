@@ -14,6 +14,7 @@ from backend.db.pool import Database
 from backend.domain.marketing import (
     clean_automation_steps,
     clean_broadcast_content,
+    get_recovery_campaign_templates,
     normalize_audience,
 )
 from backend.repositories.events import EventRepository
@@ -425,6 +426,224 @@ class MarketingService:
                 after={"created": created, "offer_price_br": str(offer_price), "expires_at": expires_at.isoformat()},
             )
         return {"created": created, "rule_id": str(rule["id"]), "offer_price_br": str(offer_price), "expires_at": expires_at.isoformat()}
+
+    async def preview_recovery_campaign(self, *, product_id: UUID | None = None) -> dict[str, Any]:
+        """Provides preview reach and time data for the recovery campaign UI."""
+        async with self.db.connection() as conn:
+            if product_id:
+                product = await conn.fetchrow(
+                    "SELECT p.id,p.slug,p.regular_price_br,p.recovery_price_br,p.discounts_enabled,"
+                    "COALESCE(am.title,en.title,p.slug) AS title, "
+                    "COALESCE(am.title,p.slug) AS title_am, COALESCE(en.title,p.slug) AS title_en "
+                    "FROM products p "
+                    "LEFT JOIN product_translations am ON am.product_id=p.id AND am.language='am' "
+                    "LEFT JOIN product_translations en ON en.product_id=p.id AND en.language='en' "
+                    "WHERE p.id=$1::uuid",
+                    product_id,
+                )
+            else:
+                product = await conn.fetchrow(
+                    "SELECT p.id,p.slug,p.regular_price_br,p.recovery_price_br,p.discounts_enabled,"
+                    "COALESCE(am.title,en.title,p.slug) AS title, "
+                    "COALESCE(am.title,p.slug) AS title_am, COALESCE(en.title,p.slug) AS title_en "
+                    "FROM products p "
+                    "LEFT JOIN product_translations am ON am.product_id=p.id AND am.language='am' "
+                    "LEFT JOIN product_translations en ON en.product_id=p.id AND en.language='en' "
+                    "WHERE (p.slug='ai-kezero' OR p.status='active') ORDER BY (p.slug='ai-kezero') DESC, p.created_at DESC LIMIT 1"
+                )
+            if product is None:
+                raise LookupError("Product not found")
+
+            prod_id = product["id"]
+            non_buyers_count = await self.repo.audience_count(conn, normalize_audience({"kind": "non_buyers", "product_id": str(prod_id)}))
+            high_intent_count = await self.repo.audience_count(conn, normalize_audience({"kind": "high_intent", "product_id": str(prod_id)}))
+
+        now_utc = datetime.now(UTC)
+        eat_offset = timedelta(hours=3)
+        now_eat = now_utc + eat_offset
+        midnight_eat = now_eat.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        midnight_utc = midnight_eat - eat_offset
+        seconds_until_midnight = int((midnight_utc - now_utc).total_seconds())
+        if seconds_until_midnight <= 0:
+            seconds_until_midnight = 86400
+
+        hours_remaining = round(seconds_until_midnight / 3600, 1)
+
+        templates = get_recovery_campaign_templates(
+            product_title_am=str(product["title_am"] or "AI ከዜሮ"),
+            product_title_en=str(product["title_en"] or "AI From Zero"),
+            regular_price_br=str(int(Decimal(str(product["regular_price_br"])))),
+            offer_price_br="299",
+            bot_url="https://t.me/...",
+        )
+
+        return {
+            "product": {
+                "id": str(prod_id),
+                "title": product["title"],
+                "regular_price_br": str(product["regular_price_br"]),
+                "offer_price_br": "299.00",
+            },
+            "audience": {
+                "non_buyers_count": non_buyers_count,
+                "high_intent_count": high_intent_count,
+            },
+            "deadline": {
+                "hours_remaining": hours_remaining,
+                "expires_at": midnight_utc.isoformat(),
+            },
+            "stages": [
+                {
+                    "stage_key": t["stage_key"],
+                    "name": t["name"],
+                    "audience_kind": t["audience"]["kind"],
+                    "relative_delay_minutes": t["relative_delay_minutes"],
+                    "text_am": t["content_am"]["text"],
+                    "text_en": t["content_en"]["text"],
+                    "button_am": t["content_am"]["buttons"][0]["text"] if t["content_am"].get("buttons") else "",
+                    "button_en": t["content_en"]["buttons"][0]["text"] if t["content_en"].get("buttons") else "",
+                }
+                for t in templates
+            ],
+        }
+
+    async def launch_full_recovery_campaign(
+        self,
+        *,
+        admin_telegram_id: int,
+        data: dict[str, Any],
+    ) -> dict[str, Any]:
+        """1-click launcher for the 4-stage 299 Br recovery campaign."""
+        product_id_raw = data.get("product_id")
+        async with self.db.connection() as conn:
+            if product_id_raw:
+                product = await conn.fetchrow(
+                    "SELECT p.id,p.slug,p.regular_price_br,p.recovery_price_br,p.discounts_enabled,"
+                    "COALESCE(am.title,en.title,p.slug) AS title, "
+                    "COALESCE(am.title,p.slug) AS title_am, COALESCE(en.title,p.slug) AS title_en "
+                    "FROM products p "
+                    "LEFT JOIN product_translations am ON am.product_id=p.id AND am.language='am' "
+                    "LEFT JOIN product_translations en ON en.product_id=p.id AND en.language='en' "
+                    "WHERE p.id=$1::uuid",
+                    UUID(str(product_id_raw)),
+                )
+            else:
+                product = await conn.fetchrow(
+                    "SELECT p.id,p.slug,p.regular_price_br,p.recovery_price_br,p.discounts_enabled,"
+                    "COALESCE(am.title,en.title,p.slug) AS title, "
+                    "COALESCE(am.title,p.slug) AS title_am, COALESCE(en.title,p.slug) AS title_en "
+                    "FROM products p "
+                    "LEFT JOIN product_translations am ON am.product_id=p.id AND am.language='am' "
+                    "LEFT JOIN product_translations en ON en.product_id=p.id AND en.language='en' "
+                    "WHERE (p.slug='ai-kezero' OR p.status='active') ORDER BY (p.slug='ai-kezero') DESC, p.created_at DESC LIMIT 1"
+                )
+        if product is None:
+            raise LookupError("Product not found")
+
+        prod_id = product["id"]
+        if not product["discounts_enabled"]:
+            async with self.db.transaction() as conn:
+                await conn.execute("UPDATE products SET discounts_enabled=TRUE WHERE id=$1", prod_id)
+
+        now_utc = datetime.now(UTC)
+        eat_offset = timedelta(hours=3)
+        now_eat = now_utc + eat_offset
+        midnight_eat = now_eat.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        midnight_utc = midnight_eat - eat_offset
+        seconds_until_midnight = int((midnight_utc - now_utc).total_seconds())
+        if seconds_until_midnight <= 0:
+            seconds_until_midnight = 86400
+
+        target_price = str(data.get("target_price_br") or "299.00")
+
+        rule = await self.create_discount_rule(
+            admin_telegram_id=admin_telegram_id,
+            data={
+                "product_id": str(prod_id),
+                "name": f"Flash Recovery · {target_price} Br (Midnight EAT)",
+                "rule_type": "campaign",
+                "target_price_br": target_price,
+                "expires_after_seconds": seconds_until_midnight,
+                "is_active": True,
+                "require_no_pending_payment": True,
+                "minimum_intent_score": 0,
+            },
+        )
+        rule_id = UUID(str(rule["id"]))
+
+        launch_res = await self.launch_campaign_offers(rule_id=rule_id, admin_telegram_id=admin_telegram_id)
+        offers_created = launch_res["created"]
+
+        link = await self.create_tracking_link(
+            admin_telegram_id=admin_telegram_id,
+            data={
+                "name": f"Recovery {target_price} Br Campaign {datetime.now(UTC).strftime('%Y-%m-%d')}",
+                "product_id": str(prod_id),
+                "platform": "telegram",
+                "campaign": f"recovery-{int(Decimal(target_price))}-{datetime.now(UTC).strftime('%b%d').lower()}",
+                "creative": "broadcast-image" if data.get("media_file_id") else "broadcast-text",
+                "angle": "today-only-flash-sale",
+            },
+        )
+        bot_url = link.get("bot_url", "")
+
+        media = None
+        media_file_id = str(data.get("media_file_id") or "").strip()
+        media_type = str(data.get("media_type") or "photo").strip().lower()
+        if media_file_id:
+            media = {"type": media_type, "file_id": media_file_id}
+
+        templates = get_recovery_campaign_templates(
+            product_title_am=str(product["title_am"] or "AI ከዜሮ"),
+            product_title_en=str(product["title_en"] or "AI From Zero"),
+            regular_price_br=str(int(Decimal(str(product["regular_price_br"])))),
+            offer_price_br=str(int(Decimal(target_price))),
+            bot_url=bot_url,
+            media=media,
+        )
+
+        scheduled_broadcasts: list[dict[str, Any]] = []
+        for tpl in templates:
+            bc = await self.create_broadcast(
+                admin_telegram_id=admin_telegram_id,
+                data={
+                    "name": tpl["name"],
+                    "audience_definition": {
+                        "kind": tpl["audience"]["kind"],
+                        "product_id": str(prod_id),
+                    },
+                    "content_am": tpl["content_am"],
+                    "content_en": tpl["content_en"],
+                },
+            )
+            scheduled_time = now_utc + timedelta(minutes=tpl["relative_delay_minutes"])
+            if scheduled_time < midnight_utc or tpl["stage_key"] in {"blast_1a", "blast_1b"}:
+                sched = await self.schedule_broadcast(
+                    broadcast_id=UUID(str(bc["id"])),
+                    admin_telegram_id=admin_telegram_id,
+                    scheduled_at=scheduled_time,
+                )
+                scheduled_broadcasts.append({
+                    "id": str(bc["id"]),
+                    "name": tpl["name"],
+                    "scheduled_at": scheduled_time.isoformat(),
+                    "recipients": sched.get("audience_snapshot_count", 0),
+                })
+
+        return {
+            "success": True,
+            "product": {
+                "id": str(prod_id),
+                "title": product["title"],
+                "regular_price_br": str(product["regular_price_br"]),
+                "offer_price_br": target_price,
+            },
+            "offers_created": offers_created,
+            "rule_id": str(rule_id),
+            "tracking_url": bot_url,
+            "expires_at": launch_res["expires_at"],
+            "broadcasts": scheduled_broadcasts,
+        }
 
     async def create_tracking_link(self, *, admin_telegram_id: int, data: dict[str, Any]) -> dict[str, Any]:
         product_id = UUID(str(data["product_id"])) if data.get("product_id") else None
