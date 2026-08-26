@@ -303,3 +303,34 @@ class MarketingRepository:
             """,
             limit,
         ))
+
+    async def bulk_create_campaign_offers(
+        self,
+        conn: asyncpg.Connection,
+        *,
+        discount_rule_id: UUID,
+        product_id: UUID,
+        original_price_br: Any,
+        offer_price_br: Any,
+        expires_at: Any,
+    ) -> int:
+        """Bulk-insert customer_offers for all non-buyer, non-blocked, active users who don't already have an active/available offer for this product."""
+        command = await conn.execute(
+            """
+            INSERT INTO customer_offers(user_id,product_id,discount_rule_id,original_price_br,offer_price_br,status,eligible_at,starts_at,expires_at)
+            SELECT u.id,$1,$2,$3,$4,'available',now(),now(),$5
+            FROM users u
+            WHERE u.status='active' AND u.is_bot_blocked=FALSE
+              AND NOT EXISTS (
+                SELECT 1 FROM orders o JOIN order_items oi ON oi.order_id=o.id
+                WHERE o.user_id=u.id AND oi.product_id=$1 AND o.status='paid'
+              )
+              AND NOT EXISTS (
+                SELECT 1 FROM customer_offers co
+                WHERE co.user_id=u.id AND co.product_id=$1
+                  AND co.status IN ('scheduled','available')
+              )
+            """,
+            product_id, discount_rule_id, original_price_br, offer_price_br, expires_at,
+        )
+        return int(command.rsplit(" ", 1)[-1])

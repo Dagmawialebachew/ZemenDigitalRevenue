@@ -65,12 +65,17 @@ def test_control_api_supports_editable_marketing_not_source_code_changes() -> No
         '/broadcasts/{broadcast_id}',
         '/automations/{automation_id}',
         '/discount-rules/{rule_id}',
+        '/discount-rules/{rule_id}/launch',
         '/links/{link_id}/enabled',
         '/payouts/{payout_id}/paid',
         "/audience/count",
     ):
         assert fragment in route
     assert "require_control_session" in route
+    repo = read("backend/repositories/marketing.py")
+    service = read("backend/services/marketing.py")
+    assert "bulk_create_campaign_offers" in repo
+    assert "launch_campaign_offers" in service
 
 
 def test_recovery_audience_is_product_scoped_when_product_present() -> None:

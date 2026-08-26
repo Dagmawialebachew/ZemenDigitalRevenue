@@ -216,6 +216,12 @@ async def set_discount_rule_enabled(rule_id: UUID, payload: EnabledAction, reque
     except Exception as exc: raise _error(exc) from None
 
 
+@router.post("/discount-rules/{rule_id}/launch")
+async def launch_campaign_offers(rule_id: UUID, request: Request, principal: ControlPrincipal = Depends(require_control_session), settings: Settings = Depends(get_settings)):
+    try: return await _service(request, settings).launch_campaign_offers(rule_id=rule_id, admin_telegram_id=principal.telegram_id)
+    except Exception as exc: raise _error(exc) from None
+
+
 @router.post("/links", status_code=status.HTTP_201_CREATED)
 async def create_link(payload: TrackingLinkCreate, request: Request, principal: ControlPrincipal = Depends(require_control_session), settings: Settings = Depends(get_settings)):
     try: return await _service(request, settings).create_tracking_link(admin_telegram_id=principal.telegram_id, data=payload.model_dump(mode="json"))

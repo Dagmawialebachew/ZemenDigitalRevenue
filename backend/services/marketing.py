@@ -382,6 +382,50 @@ class MarketingService:
             await self.repo.audit(conn, admin_id=admin_id, action="discount_rule.enable" if active else "discount_rule.disable", entity_type="discount_rule", entity_id=str(rule_id), before=jsonable_encoder(dict(before)), after=jsonable_encoder(dict(row)))
         return dict(row)
 
+    async def launch_campaign_offers(self, *, rule_id: UUID, admin_telegram_id: int) -> dict[str, Any]:
+        """Bulk-create customer_offers for all eligible non-buyers using this discount rule."""
+        async with self.db.transaction() as conn:
+            rule = await conn.fetchrow("SELECT * FROM discount_rules WHERE id=$1 FOR UPDATE", rule_id)
+            if rule is None:
+                raise LookupError("Discount rule not found")
+            if not rule["is_active"]:
+                raise ValueError("Discount rule must be active to launch campaign offers")
+            product = await conn.fetchrow("SELECT * FROM products WHERE id=$1", rule["product_id"])
+            if product is None:
+                raise LookupError("Product not found")
+            if not product["discounts_enabled"]:
+                raise ValueError("Product discounts are not enabled — enable them first")
+            expires_seconds = int(rule["expires_after_seconds"] or 86400)
+            expires_at = datetime.now(UTC) + timedelta(seconds=expires_seconds)
+            original_price = Decimal(str(product["regular_price_br"]))
+            offer_price = Decimal(str(rule["target_price_br"]))
+            created = await self.repo.bulk_create_campaign_offers(
+                conn,
+                discount_rule_id=rule["id"],
+                product_id=rule["product_id"],
+                original_price_br=original_price,
+                offer_price_br=offer_price,
+                expires_at=expires_at,
+            )
+            # Enqueue a single bulk-expiry job for all offers tied to this rule.
+            await self.jobs.enqueue_in_tx(conn, EnqueueJob(
+                job_type="marketing.offer.expire",
+                queue="automation",
+                job_key=f"campaign:expire:{rule['id']}:{int(expires_at.timestamp())}",
+                payload={"discount_rule_id": str(rule["id"]), "bulk": True},
+                run_at=expires_at,
+                priority=120,
+                max_attempts=6,
+            ))
+            admin_id = await self.repo.admin_id(conn, admin_telegram_id)
+            await self.repo.audit(
+                conn, admin_id=admin_id,
+                action="campaign_offers.launch", entity_type="discount_rule",
+                entity_id=str(rule["id"]),
+                after={"created": created, "offer_price_br": str(offer_price), "expires_at": expires_at.isoformat()},
+            )
+        return {"created": created, "rule_id": str(rule["id"]), "offer_price_br": str(offer_price), "expires_at": expires_at.isoformat()}
+
     async def create_tracking_link(self, *, admin_telegram_id: int, data: dict[str, Any]) -> dict[str, Any]:
         product_id = UUID(str(data["product_id"])) if data.get("product_id") else None
         language = data.get("language_hint") or None
