@@ -127,7 +127,7 @@ async def _finalize_broadcast_if_terminal(conn: Any, broadcast_id: UUID) -> bool
     """Complete a broadcast only when no recipient is still waiting on a send job."""
     row = await conn.fetchrow(
         """
-        SELECT status,
+        SELECT b.status,
                count(*) FILTER (WHERE br.status='queued') AS queued,
                count(*) FILTER (WHERE br.status='sent') AS sent,
                count(*) FILTER (WHERE br.status='failed') AS failed,
