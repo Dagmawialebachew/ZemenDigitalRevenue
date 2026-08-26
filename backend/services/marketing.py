@@ -427,29 +427,41 @@ class MarketingService:
             )
         return {"created": created, "rule_id": str(rule["id"]), "offer_price_br": str(offer_price), "expires_at": expires_at.isoformat()}
 
-    async def preview_recovery_campaign(self, *, product_id: UUID | None = None) -> dict[str, Any]:
+    async def preview_recovery_campaign(self, *, product_id: UUID | str | None = None) -> dict[str, Any]:
         """Provides preview reach and time data for the recovery campaign UI."""
+        parsed_id: UUID | None = None
+        if product_id:
+            try:
+                parsed_id = UUID(str(product_id).strip())
+            except (ValueError, AttributeError):
+                parsed_id = None
+
         async with self.db.connection() as conn:
-            if product_id:
+            if parsed_id:
                 product = await conn.fetchrow(
-                    "SELECT p.id,p.slug,p.regular_price_br,p.recovery_price_br,p.discounts_enabled,"
-                    "COALESCE(am.title,en.title,p.slug) AS title, "
-                    "COALESCE(am.title,p.slug) AS title_am, COALESCE(en.title,p.slug) AS title_en "
-                    "FROM products p "
-                    "LEFT JOIN product_translations am ON am.product_id=p.id AND am.language='am' "
-                    "LEFT JOIN product_translations en ON en.product_id=p.id AND en.language='en' "
-                    "WHERE p.id=$1::uuid",
-                    product_id,
+                    """
+                    SELECT p.id,p.slug,p.regular_price_br,p.recovery_price_br,p.discounts_enabled,
+                           COALESCE(am.title,en.title,p.slug) AS title,
+                           COALESCE(am.title,p.slug) AS title_am, COALESCE(en.title,p.slug) AS title_en
+                    FROM products p
+                    LEFT JOIN product_translations am ON am.product_id=p.id AND am.language='am'
+                    LEFT JOIN product_translations en ON en.product_id=p.id AND en.language='en'
+                    WHERE p.id=$1
+                    """,
+                    parsed_id,
                 )
             else:
                 product = await conn.fetchrow(
-                    "SELECT p.id,p.slug,p.regular_price_br,p.recovery_price_br,p.discounts_enabled,"
-                    "COALESCE(am.title,en.title,p.slug) AS title, "
-                    "COALESCE(am.title,p.slug) AS title_am, COALESCE(en.title,p.slug) AS title_en "
-                    "FROM products p "
-                    "LEFT JOIN product_translations am ON am.product_id=p.id AND am.language='am' "
-                    "LEFT JOIN product_translations en ON en.product_id=p.id AND en.language='en' "
-                    "WHERE (p.slug='ai-kezero' OR p.status='active') ORDER BY (p.slug='ai-kezero') DESC, p.created_at DESC LIMIT 1"
+                    """
+                    SELECT p.id,p.slug,p.regular_price_br,p.recovery_price_br,p.discounts_enabled,
+                           COALESCE(am.title,en.title,p.slug) AS title,
+                           COALESCE(am.title,p.slug) AS title_am, COALESCE(en.title,p.slug) AS title_en
+                    FROM products p
+                    LEFT JOIN product_translations am ON am.product_id=p.id AND am.language='am'
+                    LEFT JOIN product_translations en ON en.product_id=p.id AND en.language='en'
+                    ORDER BY (p.slug='ai-kezero') DESC, (p.status='active') DESC, p.created_at DESC
+                    LIMIT 1
+                    """
                 )
             if product is None:
                 raise LookupError("Product not found")
@@ -469,10 +481,16 @@ class MarketingService:
 
         hours_remaining = round(seconds_until_midnight / 3600, 1)
 
+        reg_price_raw = product["regular_price_br"]
+        try:
+            reg_price_display = str(int(Decimal(str(reg_price_raw)))) if reg_price_raw is not None else "549"
+        except Exception:
+            reg_price_display = "549"
+
         templates = get_recovery_campaign_templates(
             product_title_am=str(product["title_am"] or "AI ከዜሮ"),
             product_title_en=str(product["title_en"] or "AI From Zero"),
-            regular_price_br=str(int(Decimal(str(product["regular_price_br"])))),
+            regular_price_br=reg_price_display,
             offer_price_br="299",
             bot_url="https://t.me/...",
         )
@@ -481,7 +499,7 @@ class MarketingService:
             "product": {
                 "id": str(prod_id),
                 "title": product["title"],
-                "regular_price_br": str(product["regular_price_br"]),
+                "regular_price_br": str(product["regular_price_br"] or "549.00"),
                 "offer_price_br": "299.00",
             },
             "audience": {
@@ -515,27 +533,39 @@ class MarketingService:
     ) -> dict[str, Any]:
         """1-click launcher for the 4-stage 299 Br recovery campaign."""
         product_id_raw = data.get("product_id")
+        parsed_id: UUID | None = None
+        if product_id_raw:
+            try:
+                parsed_id = UUID(str(product_id_raw).strip())
+            except (ValueError, AttributeError):
+                parsed_id = None
+
         async with self.db.connection() as conn:
-            if product_id_raw:
+            if parsed_id:
                 product = await conn.fetchrow(
-                    "SELECT p.id,p.slug,p.regular_price_br,p.recovery_price_br,p.discounts_enabled,"
-                    "COALESCE(am.title,en.title,p.slug) AS title, "
-                    "COALESCE(am.title,p.slug) AS title_am, COALESCE(en.title,p.slug) AS title_en "
-                    "FROM products p "
-                    "LEFT JOIN product_translations am ON am.product_id=p.id AND am.language='am' "
-                    "LEFT JOIN product_translations en ON en.product_id=p.id AND en.language='en' "
-                    "WHERE p.id=$1::uuid",
-                    UUID(str(product_id_raw)),
+                    """
+                    SELECT p.id,p.slug,p.regular_price_br,p.recovery_price_br,p.discounts_enabled,
+                           COALESCE(am.title,en.title,p.slug) AS title,
+                           COALESCE(am.title,p.slug) AS title_am, COALESCE(en.title,p.slug) AS title_en
+                    FROM products p
+                    LEFT JOIN product_translations am ON am.product_id=p.id AND am.language='am'
+                    LEFT JOIN product_translations en ON en.product_id=p.id AND en.language='en'
+                    WHERE p.id=$1
+                    """,
+                    parsed_id,
                 )
             else:
                 product = await conn.fetchrow(
-                    "SELECT p.id,p.slug,p.regular_price_br,p.recovery_price_br,p.discounts_enabled,"
-                    "COALESCE(am.title,en.title,p.slug) AS title, "
-                    "COALESCE(am.title,p.slug) AS title_am, COALESCE(en.title,p.slug) AS title_en "
-                    "FROM products p "
-                    "LEFT JOIN product_translations am ON am.product_id=p.id AND am.language='am' "
-                    "LEFT JOIN product_translations en ON en.product_id=p.id AND en.language='en' "
-                    "WHERE (p.slug='ai-kezero' OR p.status='active') ORDER BY (p.slug='ai-kezero') DESC, p.created_at DESC LIMIT 1"
+                    """
+                    SELECT p.id,p.slug,p.regular_price_br,p.recovery_price_br,p.discounts_enabled,
+                           COALESCE(am.title,en.title,p.slug) AS title,
+                           COALESCE(am.title,p.slug) AS title_am, COALESCE(en.title,p.slug) AS title_en
+                    FROM products p
+                    LEFT JOIN product_translations am ON am.product_id=p.id AND am.language='am'
+                    LEFT JOIN product_translations en ON en.product_id=p.id AND en.language='en'
+                    ORDER BY (p.slug='ai-kezero') DESC, (p.status='active') DESC, p.created_at DESC
+                    LIMIT 1
+                    """
                 )
         if product is None:
             raise LookupError("Product not found")

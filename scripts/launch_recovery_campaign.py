@@ -196,14 +196,14 @@ async def run(image_path: str | None) -> None:
     await db.connect()
 
     bot = Bot(
-        token=settings.telegram_bot_token,
+        token=settings.bot_token,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
 
     svc = MarketingService(db, settings, bot)
 
     try:
-        admin_tg_id = settings.telegram_owner_id
+        admin_tg_id = settings.admin_telegram_ids
         print("\n\U0001f525 ZEMEN 299 Br Today-Only Recovery Campaign Launcher")
         print("=" * 60)
 

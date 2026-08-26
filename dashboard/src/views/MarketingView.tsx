@@ -60,7 +60,7 @@ function RecoveryCampaignStudio({products,onClose,onDone}:{products:MarketingPro
  useEffect(()=>{
   let live=true
   setLoadingPreview(true)
-  api.recoveryCampaignPreview(selectedProduct)
+  api.recoveryCampaignPreview(selectedProduct || undefined)
    .then(res=>{if(live)setPreview(res)})
    .catch(err=>{if(live)setError(err instanceof Error?err.message:'Could not load campaign preview')})
    .finally(()=>{if(live)setLoadingPreview(false)})

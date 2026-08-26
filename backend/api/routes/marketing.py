@@ -7,9 +7,13 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel, Field
 
+import structlog
+
 from backend.core.config import Settings, get_settings
 from backend.security.control import ControlPrincipal, require_control_session
 from backend.services.marketing import MarketingService
+
+logger = structlog.get_logger("zemen.marketing.routes")
 
 router = APIRouter(prefix="/api/control/marketing", tags=["marketing"])
 
@@ -25,7 +29,8 @@ def _error(exc: Exception) -> HTTPException:
         return HTTPException(status_code=409, detail=str(exc))
     if isinstance(exc, PermissionError):
         return HTTPException(status_code=403, detail=str(exc))
-    return HTTPException(status_code=500, detail="Marketing operation failed")
+    logger.exception("marketing_route_failed", error=str(exc))
+    return HTTPException(status_code=500, detail=f"Marketing operation failed: {str(exc)}")
 
 
 class AudienceCountRequest(BaseModel):
@@ -256,12 +261,18 @@ async def payout_paid(payout_id: UUID, payload: PayoutPaid, request: Request, pr
 @router.get("/campaigns/recovery-preview")
 async def get_recovery_campaign_preview(
     request: Request,
-    product_id: UUID | None = None,
+    product_id: str | None = None,
     _: ControlPrincipal = Depends(require_control_session),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     try:
-        return await _service(request, settings).preview_recovery_campaign(product_id=product_id)
+        parsed_id: UUID | None = None
+        if product_id and product_id.strip():
+            try:
+                parsed_id = UUID(product_id.strip())
+            except (ValueError, AttributeError):
+                parsed_id = None
+        return await _service(request, settings).preview_recovery_campaign(product_id=parsed_id)
     except Exception as exc:
         raise _error(exc) from None
 
