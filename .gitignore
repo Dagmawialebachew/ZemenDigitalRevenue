@@ -32,3 +32,6 @@ htmlcov/
 # database backups
 backups/
 *.dump
+
+# temp
+tmp/

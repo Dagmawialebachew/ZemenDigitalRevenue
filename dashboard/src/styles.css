@@ -79,3 +79,29 @@ body{background:radial-gradient(circle at 83% -10%,rgba(139,223,49,.08),transpar
 .chart-tooltip{position:absolute;z-index:5;min-width:170px;pointer-events:none;transform:translate(10px,-100%);padding:11px 12px;border:1px solid rgba(139,223,49,.18);border-radius:13px;background:rgba(6,11,8,.94);backdrop-filter:blur(18px);box-shadow:0 16px 45px rgba(0,0,0,.42)}.chart-tooltip--left{transform:translate(calc(-100% - 10px),-100%)}.chart-tooltip>span{display:block;padding-bottom:8px;margin-bottom:7px;border-bottom:1px solid rgba(255,255,255,.06);color:#89948b;font-size:8px}.chart-tooltip>div{height:21px;display:grid;grid-template-columns:12px 1fr auto;align-items:center;gap:7px}.chart-tooltip b{font-size:8px;color:#879289;font-weight:650}.chart-tooltip strong{font-size:9px;color:var(--ivory)}
 .chart-loading,.chart-error{position:absolute;inset:0;z-index:7;border-radius:14px;display:flex;align-items:center;justify-content:center;gap:7px;background:rgba(5,8,6,.72);backdrop-filter:blur(3px)}.chart-loading i{width:7px;height:7px;border-radius:50%;background:var(--green);animation:loadBounce .8s infinite alternate}.chart-loading i:nth-child(2){animation-delay:.14s}.chart-loading i:nth-child(3){animation-delay:.28s}.chart-error{inset:auto 12px 12px;color:#ff9a9f;background:rgba(45,11,14,.9);border:1px solid rgba(255,107,114,.2);padding:10px 12px;font-size:9px}
 @media(max-width:720px){.chart-panel--premium{min-height:430px}.growth-chart__toolbar{align-items:stretch;flex-direction:column}.growth-chart__totals{justify-content:space-between}.range-switcher{width:100%}.range-switcher button{flex:1}.growth-chart__canvas{height:245px}.growth-chart__legend>span{display:none}.chart-axis{display:none}.chart-tooltip{min-width:150px}.kpi--split{min-height:168px}.kpi__secondary{align-items:flex-start;flex-direction:column;gap:4px}.kpi__secondary strong{font-size:11px}}
+
+/* Customer directory: filtering, toolbar, high-intent highlight, pagination. */
+.customer-toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.role-filter{min-width:140px}
+.role-select{height:38px;padding:0 10px;font-size:9px;font-weight:750;background:#050805}
+.clear-search-btn{border:0;background:transparent;color:#8e9990;font-size:16px;line-height:1;padding:0 4px;display:flex;align-items:center}
+.clear-search-btn:hover{color:var(--ivory)}
+.customer-stage-tabs{display:flex;gap:6px;overflow-x:auto;padding-top:14px;scrollbar-width:none}
+.customer-stage-tabs::-webkit-scrollbar{display:none}
+.stage-pill{border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.015);color:#738076;padding:8px 12px;font-size:9px;font-weight:800;white-space:nowrap;transition:.16s}
+.stage-pill:hover{border-color:rgba(139,223,49,.2);color:#b3beb6}
+.stage-pill.active{border-color:rgba(139,223,49,.35);background:rgba(139,223,49,.1);color:var(--green);box-shadow:inset 0 0 0 1px rgba(139,223,49,.15)}
+.intent-high{color:var(--green)!important;font-weight:900}
+
+.pagination-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:22px;padding-top:18px;border-top:1px solid var(--line);flex-wrap:wrap}
+.pagination-info{font-size:9px;color:#78847b}
+.pagination-info b{color:var(--ivory)}
+.pagination-controls{display:flex;align-items:center;gap:6px}
+.page-numbers{display:flex;align-items:center;gap:4px}
+.page-btn{min-width:32px;height:32px;border:1px solid var(--line);border-radius:9px;background:rgba(255,255,255,.02);color:#8d9890;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;padding:0 9px;transition:.15s}
+.page-btn:hover:not(:disabled){border-color:var(--line2);color:var(--ivory);background:rgba(139,223,49,.04)}
+.page-btn.active{border-color:var(--green);background:var(--green);color:#061007;font-weight:900}
+.page-btn:disabled{opacity:.35;cursor:not-allowed}
+.page-ellipsis{display:inline-block;padding:0 4px;color:#5b665e;font-size:10px}
+@media(max-width:760px){.pagination-bar{flex-direction:column;align-items:center;gap:12px}.customer-toolbar{width:100%}.role-filter{width:100%}}
+

@@ -1,4 +1,4 @@
-import type { Admin, Alert, AuthResponse, Customer, CustomerDetail, Delivery, Order, Overview, Payment, Product, ProductDetail, ProductMedia, ProductFile, ProductRelationship, ProductTranslation, SupportCase, SupportThread, MarketingDashboard, AutomationStep, AnalyticsDashboard, FinancialDashboard, ReviewItem, SettingsBundle } from './types'
+import type { Admin, Alert, AuthResponse, Customer, CustomersResponse, CustomerDetail, Delivery, Order, Overview, Payment, Product, ProductDetail, ProductMedia, ProductFile, ProductRelationship, ProductTranslation, SupportCase, SupportThread, MarketingDashboard, AutomationStep, AnalyticsDashboard, FinancialDashboard, ReviewItem, SettingsBundle } from './types'
 
 const base = ((import.meta.env.VITE_API_BASE as string | undefined) || '').replace(/\/$/, '')
 let csrfToken = ''
@@ -42,7 +42,10 @@ export const api = {
   payments: (status?:string) => request<{items:Payment[]}>(`/api/control/payments${q({status})}`),
   orders: (status?:string) => request<{items:Order[]}>(`/api/control/orders${q({status})}`),
   deliveries: (status?:string) => request<{items:Delivery[]}>(`/api/control/deliveries${q({status})}`),
-  customers: (search?:string,stage?:string) => request<{items:Customer[]}>(`/api/control/customers${q({search,stage})}`),
+  customers: (params?: { search?: string; stage?: string; role?: string; page?: number; page_size?: number } | string, stage?: string) => {
+    if (typeof params === 'string') return request<CustomersResponse>(`/api/control/customers${q({ search: params, stage, page_size: 30 })}`)
+    return request<CustomersResponse>(`/api/control/customers${q({ page_size: 30, ...(params || {}) })}`)
+  },
   customer: (id:string) => request<CustomerDetail>(`/api/control/customers/${id}`),
   products: () => request<{items:Product[]}>('/api/control/products'),
   product: (id:string) => request<ProductDetail>(`/api/control/products/${id}`),

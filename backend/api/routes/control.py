@@ -189,12 +189,23 @@ async def customers(
     request: Request,
     search: str | None = Query(default=None, max_length=120),
     stage: str | None = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=250),
+    role: str | None = Query(default=None),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=100),
+    limit: int = Query(default=30, ge=1, le=250),
     offset: int = Query(default=0, ge=0),
     _: ControlPrincipal = Depends(require_control_session),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, object]:
-    return {"items": await _service(request, settings).customers(search=search, stage=stage, limit=limit, offset=offset)}
+    effective_limit = page_size if page_size is not None else limit
+    effective_offset = ((page - 1) * effective_limit) if page is not None else offset
+    return await _service(request, settings).customers(
+        search=search,
+        stage=stage,
+        role=role,
+        limit=effective_limit,
+        offset=effective_offset,
+    )
 
 
 @router.get("/customers/{user_id}")

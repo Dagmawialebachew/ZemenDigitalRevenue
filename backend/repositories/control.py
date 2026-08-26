@@ -181,8 +181,24 @@ class ControlRepository:
             LIMIT $2 OFFSET $3
             """, status, limit, offset))
 
-    async def customers(self, conn: asyncpg.Connection, *, search: str | None, stage: str | None, limit: int, offset: int) -> list[asyncpg.Record]:
+    async def customers(
+        self,
+        conn: asyncpg.Connection,
+        *,
+        search: str | None,
+        stage: str | None,
+        role: str | None = None,
+        limit: int = 30,
+        offset: int = 0,
+    ) -> list[asyncpg.Record]:
         needle = f"%{search.strip()}%" if search and search.strip() else None
+        normalized_stage = (stage or "").strip().lower()
+        if normalized_stage in {"", "all"}:
+            normalized_stage = None
+        normalized_role = (role or "").strip().lower()
+        if normalized_role in {"", "all"}:
+            normalized_role = None
+
         return list(await conn.fetch(
             """
             SELECT u.id, u.telegram_id, u.username, u.first_name, u.last_name, u.preferred_language,
@@ -193,11 +209,94 @@ class ControlRepository:
                    COALESCE((SELECT max(j.intent_score) FROM user_product_journeys j WHERE j.user_id=u.id),0) AS max_intent_score
             FROM users u
             LEFT JOIN user_profiles up ON up.user_id=u.id
-            WHERE ($1::text IS NULL OR u.customer_stage=$1)
-              AND ($2::text IS NULL OR concat_ws(' ',u.first_name,u.last_name,u.username,u.telegram_id::text) ILIKE $2)
+            WHERE (
+                $1::text IS NULL
+                OR ($1 = 'paid' AND u.customer_stage IN ('customer', 'repeat_customer'))
+                OR ($1 = 'unpaid' AND u.customer_stage NOT IN ('customer', 'repeat_customer'))
+                OR ($1 = 'high_intent' AND u.customer_stage IN ('high_intent', 'buy_clicked', 'awaiting_payment', 'proof_submitted'))
+                OR ($1 = 'awaiting_payment' AND u.customer_stage IN ('awaiting_payment', 'proof_submitted', 'buy_clicked'))
+                OR u.customer_stage = $1
+            )
+            AND ($2::text IS NULL OR up.role = $2)
+            AND ($3::text IS NULL OR concat_ws(' ', u.first_name, u.last_name, u.username, u.telegram_id::text) ILIKE $3)
             ORDER BY u.last_seen_at DESC
-            LIMIT $3 OFFSET $4
-            """, stage, needle, limit, offset))
+            LIMIT $4 OFFSET $5
+            """,
+            normalized_stage,
+            normalized_role,
+            needle,
+            limit,
+            offset,
+        ))
+
+    async def customers_count(
+        self,
+        conn: asyncpg.Connection,
+        *,
+        search: str | None,
+        stage: str | None,
+        role: str | None = None,
+    ) -> int:
+        needle = f"%{search.strip()}%" if search and search.strip() else None
+        normalized_stage = (stage or "").strip().lower()
+        if normalized_stage in {"", "all"}:
+            normalized_stage = None
+        normalized_role = (role or "").strip().lower()
+        if normalized_role in {"", "all"}:
+            normalized_role = None
+
+        val = await conn.fetchval(
+            """
+            SELECT count(*)
+            FROM users u
+            LEFT JOIN user_profiles up ON up.user_id=u.id
+            WHERE (
+                $1::text IS NULL
+                OR ($1 = 'paid' AND u.customer_stage IN ('customer', 'repeat_customer'))
+                OR ($1 = 'unpaid' AND u.customer_stage NOT IN ('customer', 'repeat_customer'))
+                OR ($1 = 'high_intent' AND u.customer_stage IN ('high_intent', 'buy_clicked', 'awaiting_payment', 'proof_submitted'))
+                OR ($1 = 'awaiting_payment' AND u.customer_stage IN ('awaiting_payment', 'proof_submitted', 'buy_clicked'))
+                OR u.customer_stage = $1
+            )
+            AND ($2::text IS NULL OR up.role = $2)
+            AND ($3::text IS NULL OR concat_ws(' ', u.first_name, u.last_name, u.username, u.telegram_id::text) ILIKE $3)
+            """,
+            normalized_stage,
+            normalized_role,
+            needle,
+        )
+        return int(val or 0)
+
+    async def customers_summary(self, conn: asyncpg.Connection) -> dict[str, Any]:
+        row = await conn.fetchrow(
+            """
+            SELECT
+                count(*) AS total_users,
+                count(*) FILTER (WHERE customer_stage IN ('customer', 'repeat_customer')) AS paid_customers,
+                count(*) FILTER (WHERE customer_stage NOT IN ('customer', 'repeat_customer')) AS unpaid_leads,
+                count(*) FILTER (WHERE customer_stage IN ('high_intent', 'buy_clicked', 'awaiting_payment', 'proof_submitted')) AS high_intent_leads,
+                COALESCE(sum((SELECT sum(o.total_due_br) FROM orders o WHERE o.user_id=u.id AND o.status='paid')), 0) AS total_ltv_br,
+                count(*) FILTER (WHERE customer_stage = 'repeat_customer') AS repeat_customers
+            FROM users u
+            """
+        )
+        if not row:
+            return {
+                "total_users": 0,
+                "paid_customers": 0,
+                "unpaid_leads": 0,
+                "high_intent_leads": 0,
+                "total_ltv_br": 0,
+                "repeat_customers": 0,
+            }
+        return {
+            "total_users": int(row["total_users"] or 0),
+            "paid_customers": int(row["paid_customers"] or 0),
+            "unpaid_leads": int(row["unpaid_leads"] or 0),
+            "high_intent_leads": int(row["high_intent_leads"] or 0),
+            "total_ltv_br": float(row["total_ltv_br"] or 0),
+            "repeat_customers": int(row["repeat_customers"] or 0),
+        }
 
     async def customer_detail(self, conn: asyncpg.Connection, *, user_id: UUID) -> dict[str, Any] | None:
         user = await conn.fetchrow(

@@ -32,9 +32,34 @@ class ControlService:
         async with self.db.acquire() as conn:
             return [dict(r) for r in await self.repo.deliveries(conn, status=status, limit=limit, offset=offset)]
 
-    async def customers(self, *, search: str | None, stage: str | None, limit: int, offset: int) -> list[dict[str, Any]]:
+    async def customers(
+        self,
+        *,
+        search: str | None = None,
+        stage: str | None = None,
+        role: str | None = None,
+        limit: int = 30,
+        offset: int = 0,
+    ) -> dict[str, Any]:
         async with self.db.acquire() as conn:
-            return [dict(r) for r in await self.repo.customers(conn, search=search, stage=stage, limit=limit, offset=offset)]
+            rows = await self.repo.customers(
+                conn, search=search, stage=stage, role=role, limit=limit, offset=offset
+            )
+            total = await self.repo.customers_count(
+                conn, search=search, stage=stage, role=role
+            )
+            summary = await self.repo.customers_summary(conn)
+            page_size = max(1, limit)
+            page = (offset // page_size) + 1
+            total_pages = max(1, (total + page_size - 1) // page_size)
+            return {
+                "items": [dict(r) for r in rows],
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages,
+                "summary": summary,
+            }
 
     async def customer_detail(self, *, user_id: UUID) -> dict[str, Any] | None:
         async with self.db.acquire() as conn:
