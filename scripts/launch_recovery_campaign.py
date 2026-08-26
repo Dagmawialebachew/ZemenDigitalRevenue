@@ -208,7 +208,7 @@ async def run(image_path: str | None) -> None:
         print("=" * 60)
 
         # -- Step 1: Find the product --
-        async with db.connection() as conn:
+        async with db.acquire() as conn:
             product = await conn.fetchrow(
                 "SELECT p.id,p.slug,p.regular_price_br,p.recovery_price_br,p.discounts_enabled,"
                 "COALESCE(am.title,en.title,p.slug) AS title "

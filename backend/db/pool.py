@@ -89,6 +89,11 @@ class Database:
             yield conn
 
     @asynccontextmanager
+    async def connection(self) -> AsyncIterator[asyncpg.Connection]:
+        async with self.acquire() as conn:
+            yield conn
+
+    @asynccontextmanager
     async def transaction(self) -> AsyncIterator[asyncpg.Connection]:
         pool = self.require_pool()
         started = perf_counter()

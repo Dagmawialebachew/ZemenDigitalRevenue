@@ -436,7 +436,7 @@ class MarketingService:
             except (ValueError, AttributeError):
                 parsed_id = None
 
-        async with self.db.connection() as conn:
+        async with self.db.acquire() as conn:
             if parsed_id:
                 product = await conn.fetchrow(
                     """
@@ -540,7 +540,7 @@ class MarketingService:
             except (ValueError, AttributeError):
                 parsed_id = None
 
-        async with self.db.connection() as conn:
+        async with self.db.acquire() as conn:
             if parsed_id:
                 product = await conn.fetchrow(
                     """
