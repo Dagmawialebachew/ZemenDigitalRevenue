@@ -10,6 +10,7 @@ from aiogram.types import ErrorEvent
 from backend.core.config import Settings
 from backend.db.pool import Database
 from backend.services.error_reporting import ErrorReporter
+from bot.routers.admin_campaign import router as admin_campaign_router
 from bot.routers.fallback import router as fallback_router
 from bot.routers.language import router as language_router
 from bot.routers.legal import router as legal_router
@@ -83,6 +84,7 @@ def create_dispatcher(
         sales_router,
         payments_router,
         support_router,
+        admin_campaign_router,
         menu_router,
         fallback_router,
     )
