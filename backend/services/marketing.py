@@ -646,19 +646,31 @@ class MarketingService:
                     "content_en": tpl["content_en"],
                 },
             )
-            scheduled_time = now_utc + timedelta(minutes=tpl["relative_delay_minutes"])
-            if scheduled_time < midnight_utc or tpl["stage_key"] in {"blast_1a", "blast_1b"}:
-                sched = await self.schedule_broadcast(
-                    broadcast_id=UUID(str(bc["id"])),
-                    admin_telegram_id=admin_telegram_id,
-                    scheduled_at=scheduled_time,
-                )
-                scheduled_broadcasts.append({
-                    "id": str(bc["id"]),
-                    "name": tpl["name"],
-                    "scheduled_at": scheduled_time.isoformat(),
-                    "recipients": sched.get("audience_snapshot_count", 0),
-                })
+            if tpl["stage_key"] == "blast_1a":
+                scheduled_time = now_utc
+            elif tpl["stage_key"] == "blast_1b":
+                scheduled_time = now_utc + timedelta(minutes=5)
+            elif tpl["stage_key"] == "blast_2":
+                scheduled_time = min(now_utc + timedelta(hours=4), max(now_utc + timedelta(minutes=15), midnight_utc - timedelta(hours=4)))
+            elif tpl["stage_key"] == "blast_3":
+                scheduled_time = min(now_utc + timedelta(hours=7), max(now_utc + timedelta(minutes=30), midnight_utc - timedelta(hours=1)))
+            else:
+                scheduled_time = now_utc + timedelta(minutes=tpl["relative_delay_minutes"])
+
+            if scheduled_time < now_utc:
+                scheduled_time = now_utc
+
+            sched = await self.schedule_broadcast(
+                broadcast_id=UUID(str(bc["id"])),
+                admin_telegram_id=admin_telegram_id,
+                scheduled_at=scheduled_time,
+            )
+            scheduled_broadcasts.append({
+                "id": str(bc["id"]),
+                "name": tpl["name"],
+                "scheduled_at": scheduled_time.isoformat(),
+                "recipients": sched.get("audience_snapshot_count", 0),
+            })
 
         return {
             "success": True,
