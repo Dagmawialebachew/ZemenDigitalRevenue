@@ -90,13 +90,14 @@ async def retarget_command(message: Message, db: Database, settings: Settings) -
     if product is None or product["status"] != "active":
         await message.answer(f"⚠️ Active product not found: <code>{PRODUCT_SLUG}</code>")
         return
-    audience = normalize_audience({"kind": "high_intent_non_buyers", "product_id": str(product["id"])})
+    audience = normalize_audience({"kind": "everyone"})
     count = await MarketingService(db, settings).audience_count(audience.as_dict())
     am_text, en_text = retargeting_copy()
     await message.answer(
         "🎯 <b>Retargeting preview</b>\n\n"
         f"Product: <code>{escape(PRODUCT_SLUG)}</code>\n"
-        f"Audience: <code>{count}</code> high-intent non-buyers\n"
+        f"Audience: <code>{count}</code> all active reachable bot users\n"
+        "This includes previous buyers.\n"
         "Format: text-only\n\n"
         f"<b>AM copy:</b>\n{am_text}\n\n"
         f"<b>EN copy:</b>\n{en_text}\n\n"
@@ -130,10 +131,10 @@ async def launch_retarget(callback: CallbackQuery, db: Database, settings: Setti
             )
         if product is None or product["status"] != "active":
             raise LookupError(f"Active product not found: {PRODUCT_SLUG}")
-        audience = normalize_audience({"kind": "high_intent_non_buyers", "product_id": str(product["id"])})
+        audience = normalize_audience({"kind": "everyone"})
         count = await service.audience_count(audience.as_dict())
         if count == 0:
-            raise ValueError("No eligible high-intent non-buyers")
+                raise ValueError("No active reachable bot users")
         am_text, en_text = retargeting_copy()
         urls: list[str] = []
         for action in ("buy", "preview", "sample"):

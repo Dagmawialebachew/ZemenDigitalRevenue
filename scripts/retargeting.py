@@ -96,7 +96,7 @@ def _preview(text: str, buttons: list[dict[str, str]], audience_count: int) -> N
     print("\n" + "=" * 72)
     print("HIGH-INTENT RETARGETING PREVIEW")
     print("=" * 72)
-    print(f"Audience: {audience_count} high-intent non-buyers for {PRODUCT_SLUG}")
+    print(f"Audience: {audience_count} all active reachable bot users for {PRODUCT_SLUG}")
     print("Mode: text-only broadcast")
     print("\n" + text)
     print("\nButtons:")
@@ -121,7 +121,7 @@ async def run(*, dry_run: bool) -> None:
         if product is None or product["status"] != "active":
             raise LookupError(f"Active product not found: {PRODUCT_SLUG}")
 
-        audience = normalize_audience({"kind": "high_intent_non_buyers", "product_id": str(product["id"])})
+        audience = normalize_audience({"kind": "everyone"})
         audience_count = await service.audience_count(audience.as_dict())
         am_text, en_text = retargeting_copy()
 

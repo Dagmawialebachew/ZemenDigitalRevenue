@@ -109,7 +109,7 @@ def test_s11_still_has_no_redis() -> None:
 
 def test_high_intent_retargeting_is_text_only_and_has_three_actions() -> None:
     launcher = read("scripts/retargeting.py")
-    assert '"kind": "high_intent_non_buyers"' in launcher
+    assert '"kind": "everyone"' in launcher
     assert '"creative": "text-only"' in launcher
     assert launcher.count('"key": "buy"') == 2
     assert launcher.count('"key": "preview"') == 2
