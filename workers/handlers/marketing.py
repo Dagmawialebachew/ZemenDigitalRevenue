@@ -201,8 +201,12 @@ def _markup(buttons: list[dict[str, str]], public_base: str) -> tuple[InlineKeyb
     builder = InlineKeyboardBuilder(); created=[]
     for i,b in enumerate(buttons):
         token=b["token"]
-        tracked=f"{public_base.rstrip('/')}/api/public/m/{token}" if public_base else b["url"]
-        builder.row(inline_action(text=b["text"],url=tracked,style=ButtonStyle.SUCCESS if i==0 else ButtonStyle.PRIMARY))
+        if b.get("callback_data"):
+            tracked = f"broadcast:click:{token}"
+            builder.row(inline_action(text=b["text"], callback_data=tracked, style=ButtonStyle.SUCCESS if i == 0 else ButtonStyle.PRIMARY))
+        else:
+            tracked=f"{public_base.rstrip('/')}/api/public/m/{token}" if public_base else b["url"]
+            builder.row(inline_action(text=b["text"],url=tracked,style=ButtonStyle.SUCCESS if i==0 else ButtonStyle.PRIMARY))
         created.append((b["key"],tracked))
     return builder.as_markup(),created
 
@@ -239,12 +243,12 @@ async def broadcast_send_handler(ctx: WorkerContext, job: Job) -> dict[str, obje
                     try:
                         existing=await conn.fetchrow(
                             """INSERT INTO broadcast_click_links(token,broadcast_id,user_id,button_key,destination_url) VALUES($1,$2,$3,$4,$5) RETURNING *""",
-                            token,broadcast_id,user_id,b["key"],b["url"],
+                                token,broadcast_id,user_id,b["key"],b.get("url") or b.get("callback_data"),
                         ); break
                     except Exception as exc:
                         if "duplicate" not in str(exc).lower(): raise
                 if existing is None: raise RuntimeError("Could not allocate broadcast click token")
-            buttons.append({"key":b["key"],"text":b["text"],"url":b["url"],"token":existing["token"]})
+            buttons.append({"key":b["key"],"text":b["text"],"url":b.get("url", ""),"callback_data":b.get("callback_data", ""),"token":existing["token"]})
     markup,_=_markup(buttons,ctx.settings.public_api_base_url)
     text=str(content.get("text") or "").strip(); media=content.get("media") if isinstance(content.get("media"),dict) else None
     try:

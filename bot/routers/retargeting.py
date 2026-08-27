@@ -11,9 +11,14 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from backend.core.config import Settings
 from backend.db.pool import Database
 from backend.domain.marketing import normalize_audience
+from backend.repositories.products import ProductRepository
+from backend.repositories.sessions import ConversationSessionRepository
 from backend.services.marketing import MarketingService
+from backend.services.salesman import SalesmanService
 from bot.keyboards.primitives import inline_action
-from scripts.retargeting import _buttons, _buttons_en, retargeting_copy
+from bot.services.current_user import load_current_entry_context
+from bot.services.product_media import send_sample_pdf, send_sales_gallery
+from scripts.retargeting import _callback_buttons, _callback_buttons_en, retargeting_copy
 
 router = Router(name="retargeting")
 PRODUCT_SLUG = "ai-kezero"
@@ -37,12 +42,40 @@ def _launch_keyboard() -> InlineKeyboardMarkup:
 
 
 def _preview_keyboard(settings: Settings, *, language: str) -> InlineKeyboardMarkup:
-    base_url = f"https://t.me/{settings.bot_username.strip().lstrip('@')}" if settings.bot_username.strip() else "https://t.me"
-    buttons = _buttons(buy_url=base_url, preview_url=base_url, sample_url=base_url) if language == "am" else _buttons_en(buy_url=base_url, preview_url=base_url, sample_url=base_url)
+    buttons = _callback_buttons() if language == "am" else _callback_buttons_en()
     builder = InlineKeyboardBuilder()
     for button in buttons:
-        builder.row(inline_action(text=button["text"], url=button["url"], style=None))
+        builder.row(inline_action(text=button["text"], callback_data=button["callback_data"], style=None))
     return builder.as_markup()
+
+
+async def _run_retarget_action(*, message: Message, db: Database, settings: Settings, user_id: object, action: str) -> None:
+    async with db.transaction() as conn:
+        product = await ProductRepository().get_active_by_slug(conn, PRODUCT_SLUG)
+        if product is None:
+            raise LookupError(f"Active product not found: {PRODUCT_SLUG}")
+        await ConversationSessionRepository().set_focus_product(conn, user_id=user_id, product_id=product["id"])
+
+    if action == "buy":
+        from bot.routers.payments import send_checkout
+
+        await send_checkout(message=message, db=db, settings=settings, user_id=user_id, product_slug=PRODUCT_SLUG)
+        return
+
+    detail = await SalesmanService(db).detail(user_id=user_id, kind="preview")
+    if action == "preview":
+        if not await send_sales_gallery(message=message, presentation=detail.presentation, settings=settings):
+            await message.answer("The product preview is not available right now.")
+        return
+    if action == "sample":
+        if not await send_sample_pdf(message=message, presentation=detail.presentation, settings=settings, reply_markup=None):
+            await message.answer(
+                "📄 The sample is not available right now."
+                if detail.presentation.language == "en"
+                else "📄 ሳምፕሉ አሁን አይገኝም።"
+            )
+        return
+    raise ValueError("Unknown retargeting action")
 
 
 def _report_keyboard(broadcast_id: UUID) -> InlineKeyboardMarkup:
@@ -150,6 +183,81 @@ async def send_retarget_preview_to_admins(callback: CallbackQuery, bot: Bot, set
     await callback.answer(f"Preview sent to {sent} admin(s)")
 
 
+async def _dispatch_retarget_action(
+    *, message: Message, db: Database, settings: Settings, user_id: object, action: str
+) -> None:
+    await _run_retarget_action(
+        message=message,
+        db=db,
+        settings=settings,
+        user_id=user_id,
+        action=action,
+    )
+
+
+@router.callback_query(F.data.startswith("broadcast:click:"))
+async def broadcast_retarget_click(callback: CallbackQuery, db: Database, settings: Settings) -> None:
+    if callback.message is None or callback.data is None:
+        await callback.answer()
+        return
+    current = await load_current_entry_context(db, telegram_user=callback.from_user)
+    if current is None:
+        await callback.answer("Please restart the bot", show_alert=True)
+        return
+    token = callback.data.removeprefix("broadcast:click:")
+    async with db.transaction() as conn:
+        click = await conn.fetchrow(
+            "SELECT button_key FROM broadcast_click_links WHERE token=$1 AND user_id=$2 FOR UPDATE",
+            token,
+            current.user_id,
+        )
+        if click is None:
+            await callback.answer("This button has expired", show_alert=True)
+            return
+        await conn.execute(
+            """UPDATE broadcast_click_links
+               SET click_count=click_count+1, clicked_at=COALESCE(clicked_at,now()),
+                   first_clicked_at=COALESCE(first_clicked_at,now()), updated_at=now()
+               WHERE token=$1 AND user_id=$2""",
+            token,
+            current.user_id,
+        )
+    await callback.answer()
+    try:
+        await _dispatch_retarget_action(
+            message=callback.message,
+            db=db,
+            settings=settings,
+            user_id=current.user_id,
+            action=str(click["button_key"]),
+        )
+    except (LookupError, ValueError) as exc:
+        await callback.message.answer(str(exc))
+
+
+@router.callback_query(F.data.startswith("retarget:action:"))
+async def admin_preview_retarget_click(callback: CallbackQuery, db: Database, settings: Settings) -> None:
+    if callback.message is None or callback.data is None:
+        await callback.answer()
+        return
+    current = await load_current_entry_context(db, telegram_user=callback.from_user)
+    if current is None:
+        await callback.answer("Please restart the bot", show_alert=True)
+        return
+    action = callback.data.removeprefix("retarget:action:")
+    await callback.answer()
+    try:
+        await _dispatch_retarget_action(
+            message=callback.message,
+            db=db,
+            settings=settings,
+            user_id=current.user_id,
+            action=action,
+        )
+    except (LookupError, ValueError) as exc:
+        await callback.message.answer(str(exc))
+
+
 @router.callback_query(F.data == "retarget:launch")
 async def launch_retarget(callback: CallbackQuery, db: Database, settings: Settings) -> None:
     if callback.from_user.id not in settings.admin_telegram_ids:
@@ -168,30 +276,15 @@ async def launch_retarget(callback: CallbackQuery, db: Database, settings: Setti
         audience = normalize_audience({"kind": "everyone"})
         count = await service.audience_count(audience.as_dict())
         if count == 0:
-                raise ValueError("No active reachable bot users")
+            raise ValueError("No active reachable bot users")
         am_text, en_text = retargeting_copy()
-        urls: list[str] = []
-        for action in ("buy", "preview", "sample"):
-            link = await service.create_tracking_link(
-                admin_telegram_id=callback.from_user.id,
-                data={
-                    "name": f"{CAMPAIGN_NAME} · {action}",
-                    "product_id": str(product["id"]),
-                    "platform": "telegram",
-                    "campaign": "high-intent-retargeting",
-                    "creative": "text-only",
-                    "angle": action,
-                    "language_hint": "am",
-                },
-            )
-            urls.append(str(link["bot_url"]))
         broadcast = await service.create_broadcast(
             admin_telegram_id=callback.from_user.id,
             data={
                 "name": CAMPAIGN_NAME,
                 "audience_definition": audience.as_dict(),
-                "content_am": {"text": am_text, "buttons": _buttons(buy_url=urls[0], preview_url=urls[1], sample_url=urls[2])},
-                "content_en": {"text": en_text, "buttons": _buttons_en(buy_url=urls[0], preview_url=urls[1], sample_url=urls[2])},
+                "content_am": {"text": am_text, "buttons": _callback_buttons()},
+                "content_en": {"text": en_text, "buttons": _callback_buttons_en()},
             },
         )
         scheduled = await service.schedule_broadcast(

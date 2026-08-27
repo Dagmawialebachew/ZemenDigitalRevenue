@@ -89,12 +89,16 @@ def clean_broadcast_content(value: dict[str, Any] | None) -> dict[str, Any] | No
             continue
         label = str(raw.get("text") or "").strip()[:80]
         destination = str(raw.get("url") or "").strip()
+        callback_data = str(raw.get("callback_data") or "").strip()[:64]
         key = str(raw.get("key") or f"button_{i+1}").strip()[:40]
-        if not label or not destination or key in seen:
+        if not label or (not destination and not callback_data) or (destination and callback_data) or key in seen:
             continue
-        validate_destination_url(destination)
+        if destination:
+            validate_destination_url(destination)
         seen.add(key)
-        buttons.append({"key": key, "text": label, "url": destination})
+        button = {"key": key, "text": label}
+        button["url" if destination else "callback_data"] = destination or callback_data
+        buttons.append(button)
     cleaned_media = None
     if media:
         media_type = str(media.get("type") or "").strip().lower()

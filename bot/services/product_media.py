@@ -69,7 +69,7 @@ async def send_sales_hero(
     presentation: SalesPresentation,
     settings: Settings,
     text: str,
-    reply_markup: InlineKeyboardMarkup,
+    reply_markup: InlineKeyboardMarkup | None,
 ) -> bool:
     cover = _first(presentation.media, "cover", "thumbnail")
     if cover is None or _kind(cover) != "photo":

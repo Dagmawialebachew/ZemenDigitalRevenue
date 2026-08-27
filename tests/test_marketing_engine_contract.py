@@ -110,11 +110,15 @@ def test_s11_still_has_no_redis() -> None:
 def test_high_intent_retargeting_is_text_only_and_has_three_actions() -> None:
     launcher = read("scripts/retargeting.py")
     assert '"kind": "everyone"' in launcher
-    assert '"creative": "text-only"' in launcher
-    assert launcher.count('"key": "buy"') == 2
-    assert launcher.count('"key": "preview"') == 2
-    assert launcher.count('"key": "sample"') == 2
+    assert "Mode: text-only broadcast" in launcher
+    assert launcher.count('"callback_data": "retarget:action:buy"') == 2
+    assert launcher.count('"callback_data": "retarget:action:preview"') == 2
+    assert launcher.count('"callback_data": "retarget:action:sample"') == 2
     assert "ሳምፕል" in launcher
+    assert '"callback_data": "retarget:action:buy"' in launcher
+    assert '"callback_data": "retarget:action:preview"' in launcher
+    assert '"callback_data": "retarget:action:sample"' in launcher
+    assert "<b>" in launcher and "<i>" in launcher
 
 
 def test_retargeting_report_exposes_delivery_and_conversion_metrics() -> None:
@@ -127,6 +131,7 @@ def test_retargeting_report_exposes_delivery_and_conversion_metrics() -> None:
     assert 'retarget:send_preview' in router
     assert "Send exact preview to admins" in router
     assert "View report" in router
+    assert "broadcast:click:" in router
     assert "broadcast_report" in service
     for field in ("sent_count", "blocked_count", "failed_count", "clickers", "conversions", "revenue_br"):
         assert field in repo

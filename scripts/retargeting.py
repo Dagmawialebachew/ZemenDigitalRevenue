@@ -34,11 +34,11 @@ CAMPAIGN_NAME = "High-Intent Retargeting · AI ከዜሮ"
 # Keep the action copy at the end of the message so the value proposition is
 # read before the buyer sees the choices.
 def retargeting_copy() -> tuple[str, str]:
-    amharic = """🚨 ሌሎች ስራቸውን በAI በደቂቃዎች ውስጥ ሲያጠናቅቁ፣ እርስዎ አሁንም በድካም ጊዜዎን እያባከኑ ነው?
+    amharic = """<b>🚨 ሌሎች ስራቸውን በAI በደቂቃዎች ውስጥ ሲያጠናቅቁ፣ እርስዎ አሁንም በድካም ጊዜዎን እያባከኑ ነው?</b>
 
-ችግሩ AI አለመቻልዎ አይደለም፤ ትክክለኛውን ጥያቄና አጠቃቀም በተደራጀ መንገድ አለማወቅዎ ነው።
+ችግሩ <i>AI አለመቻልዎ</i> አይደለም፤ ትክክለኛውን ጥያቄና አጠቃቀም በተደራጀ መንገድ አለማወቅዎ ነው።
 
-📘 “AI ከዜሮ” — ስለ AI ምንነትና እንዴት በዕለት ተዕለት ህይወትዎ በተግባር መጠቀም እንደሚችሉ ከመሠረቱ የሚያስተምር የተሟላ መጽሐፍ ነው።
+📘 <b>“AI ከዜሮ”</b> — ስለ AI ምንነትና እንዴት በዕለት ተዕለት ህይወትዎ በተግባር መጠቀም እንደሚችሉ ከመሠረቱ የሚያስተምር የተሟላ መጽሐፍ ነው።
 
 በዚህ መጽሐፍ ውስጥ፦
 • ባለ 131 ገጽ ተግባራዊ ዕውቀት ሙሉ በሙሉ በአማርኛ
@@ -46,19 +46,19 @@ def retargeting_copy() -> tuple[str, str]:
 • ለሥራ፣ ለትምህርት፣ ለCV/Job Search እና ለቢዝነስ የተዘጋጁ Workflows
 • በስልክዎ ብቻ የሚተገበር፤ ምንም ዓይነት Coding ወይም የቴክኒክ ዳራ አይጠይቅም
 
-አሁኑኑ AIን ተረድተው ስራዎን ማቅለል ይጀምሩ!
+<b>አሁኑኑ AIን ተረድተው ስራዎን ማቅለል ይጀምሩ!</b>
 
 ---
-💡 መጽሐፉን እንዴት ማግኘት ይችላሉ?
+<i>💡 መጽሐፉን እንዴት ማግኘት ይችላሉ?</i>
 • ወዲያውኑ ገዝተው ለማንበብ፦ «💚 ልግዛ · 549.00 ብር» የሚለውን ይጫኑ
 • የይዘት ማውጫውንና ማሳያውን ለማየት፦ «👀 ውስጡን አሳየኝ» ይጫኑ
 • ነፃ ሳምፕል ለማንበብ፦ «📄 ሳምፕል PDF ነፃ» ይጫኑ"""
 
-    english = """🚨 While others complete hours of work in minutes with AI, are you still wasting time guessing what to type?
+    english = """<b>🚨 While others complete hours of work in minutes with AI, are you still wasting time guessing what to type?</b>
 
-The problem isn't your capability - it's not having a structured system to guide AI.
+The problem isn't your capability - it's <i>not having a structured system to guide AI</i>.
 
-📘 “AI ከዜሮ” is a complete, step-by-step book built to teach you exactly what AI is and how to use it for real-world tasks.
+📘 <b>“AI ከዜሮ”</b> is a complete, step-by-step book built to teach you exactly what AI is and how to use it for real-world tasks.
 
 Inside this book:
 • 131 practical pages written clearly in Amharic
@@ -66,10 +66,10 @@ Inside this book:
 • Complete AI frameworks for work, study, career growth, and business
 • 100% mobile-friendly - zero coding or technical background required
 
-Stop guessing. Master AI and take control of your time today!
+<b>Stop guessing. Master AI and take control of your time today!</b>
 
 ---
-💡 How to proceed:
+<i>💡 How to proceed:</i>
 • To get the complete book instantly: tap «💚 Get it · 549.00 Br»
 • To preview the chapters and sample: tap «👀 Show me what's inside»
 • To read the free sample: tap «📄 Free sample PDF»"""
@@ -89,6 +89,22 @@ def _buttons_en(*, buy_url: str, preview_url: str, sample_url: str) -> list[dict
         {"key": "buy", "text": "💚 Get it · 549.00 Br", "url": buy_url},
         {"key": "preview", "text": "👀 Show me what's inside", "url": preview_url},
         {"key": "sample", "text": "📄 Free sample PDF", "url": sample_url},
+    ]
+
+
+def _callback_buttons() -> list[dict[str, str]]:
+    return [
+        {"key": "buy", "text": "💚 ልግዛ · 549.00 ብር", "callback_data": "retarget:action:buy"},
+        {"key": "preview", "text": "👀 ውስጡን አሳየኝ", "callback_data": "retarget:action:preview"},
+        {"key": "sample", "text": "📄 ሳምፕል PDF ነፃ", "callback_data": "retarget:action:sample"},
+    ]
+
+
+def _callback_buttons_en() -> list[dict[str, str]]:
+    return [
+        {"key": "buy", "text": "💚 Get it · 549.00 Br", "callback_data": "retarget:action:buy"},
+        {"key": "preview", "text": "👀 Show me what's inside", "callback_data": "retarget:action:preview"},
+        {"key": "sample", "text": "📄 Free sample PDF", "callback_data": "retarget:action:sample"},
     ]
 
 
@@ -146,31 +162,13 @@ async def run(*, dry_run: bool) -> None:
             print("Aborted. No broadcast was created.")
             return
 
-        urls = []
-        for action in ("buy", "preview", "sample"):
-            link = await service.create_tracking_link(
-                admin_telegram_id=settings.admin_telegram_ids[0],
-                data={
-                    "name": f"{CAMPAIGN_NAME} · {action}",
-                    "product_id": str(product["id"]),
-                    "platform": "telegram",
-                    "campaign": "high-intent-retargeting",
-                    "creative": "text-only",
-                    "angle": action,
-                    "language_hint": "am",
-                },
-            )
-            urls.append(str(link["bot_url"]))
-        am_buttons = _buttons(buy_url=urls[0], preview_url=urls[1], sample_url=urls[2])
-        en_buttons = _buttons_en(buy_url=urls[0], preview_url=urls[1], sample_url=urls[2])
-
         broadcast = await service.create_broadcast(
             admin_telegram_id=settings.admin_telegram_ids[0],
             data={
                 "name": CAMPAIGN_NAME,
                 "audience_definition": audience.as_dict(),
-                "content_am": {"text": am_text, "buttons": am_buttons},
-                "content_en": {"text": en_text, "buttons": en_buttons},
+                "content_am": {"text": am_text, "buttons": _callback_buttons()},
+                "content_en": {"text": en_text, "buttons": _callback_buttons_en()},
             },
         )
         scheduled = await service.schedule_broadcast(
