@@ -3,7 +3,7 @@ from __future__ import annotations
 from html import escape
 from uuid import UUID
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -27,9 +27,21 @@ def _is_admin(message: Message, settings: Settings) -> bool:
 def _launch_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(
+        inline_action(text="📨 Send exact preview to admins", callback_data="retarget:send_preview", style=None),
+    )
+    builder.row(
         inline_action(text="🚀 Launch retargeting", callback_data="retarget:launch", style=None),
         inline_action(text="✖ Cancel", callback_data="retarget:cancel", style=None),
     )
+    return builder.as_markup()
+
+
+def _preview_keyboard(settings: Settings, *, language: str) -> InlineKeyboardMarkup:
+    base_url = f"https://t.me/{settings.bot_username.strip().lstrip('@')}" if settings.bot_username.strip() else "https://t.me"
+    buttons = _buttons(buy_url=base_url, preview_url=base_url, sample_url=base_url) if language == "am" else _buttons_en(buy_url=base_url, preview_url=base_url, sample_url=base_url)
+    builder = InlineKeyboardBuilder()
+    for button in buttons:
+        builder.row(inline_action(text=button["text"], url=button["url"], style=None))
     return builder.as_markup()
 
 
@@ -114,6 +126,28 @@ async def cancel_retarget(callback: CallbackQuery, settings: Settings) -> None:
     await callback.answer("Cancelled")
     if callback.message:
         await callback.message.edit_text("Retargeting cancelled. No broadcast was created.")
+
+
+@router.callback_query(F.data == "retarget:send_preview")
+async def send_retarget_preview_to_admins(callback: CallbackQuery, bot: Bot, settings: Settings) -> None:
+    if callback.from_user.id not in settings.admin_telegram_ids:
+        await callback.answer()
+        return
+    am_text, en_text = retargeting_copy()
+    sent = 0
+    for admin_id in settings.admin_telegram_ids:
+        await bot.send_message(
+            chat_id=admin_id,
+            text=am_text,
+            reply_markup=_preview_keyboard(settings, language="am"),
+        )
+        await bot.send_message(
+            chat_id=admin_id,
+            text=en_text,
+            reply_markup=_preview_keyboard(settings, language="en"),
+        )
+        sent += 1
+    await callback.answer(f"Preview sent to {sent} admin(s)")
 
 
 @router.callback_query(F.data == "retarget:launch")

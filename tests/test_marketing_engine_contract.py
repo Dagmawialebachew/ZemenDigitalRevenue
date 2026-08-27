@@ -124,6 +124,8 @@ def test_retargeting_report_exposes_delivery_and_conversion_metrics() -> None:
     assert 'Command("retarget")' in router
     assert 'Command("retarget_report")' in router
     assert 'retarget:report:' in router
+    assert 'retarget:send_preview' in router
+    assert "Send exact preview to admins" in router
     assert "View report" in router
     assert "broadcast_report" in service
     for field in ("sent_count", "blocked_count", "failed_count", "clickers", "conversions", "revenue_br"):
