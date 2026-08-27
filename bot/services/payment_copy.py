@@ -95,6 +95,21 @@ def checkout_intro_from_resume(resume: PaymentResume) -> str:
     )
 
 
+def payment_confirmation(*, method: str, language: str) -> str:
+    label = "CBE" if method == "cbe" else "Telebirr"
+    if language == "en":
+        return (
+            f"💳 <b>{label} selected</b>\n\n"
+            "By continuing, you confirm this purchase and agree to the short purchase terms and refund policy.\n\n"
+            "Your payment instructions will appear next."
+        )
+    return (
+        f"💳 <b>{label} መርጠዋል</b>\n\n"
+        "በመቀጠል ይህን ግዢ እንደተስማሙበት እና አጭር የግዢ ውሎችንና የተመላሽ ፖሊሲን እንደተቀበሉ ያረጋግጣሉ።\n\n"
+        "ከዚያ በኋላ የክፍያ መረጃው ይታያል።"
+    )
+
+
 def payment_instructions(
     *,
     resume: PaymentResume,

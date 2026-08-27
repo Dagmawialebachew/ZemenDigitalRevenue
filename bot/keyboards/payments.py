@@ -83,6 +83,25 @@ def purchase_policy_keyboard(*, order_public_id: str, language: str) -> InlineKe
     return builder.as_markup()
 
 
+def payment_confirmation_keyboard(*, order_public_id: str, method: str, language: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        inline_action(
+            text="✅ Continue to payment" if language == "en" else "✅ ወደ ክፍያ ይቀጥሉ",
+            callback_data=f"pay:confirm:{order_public_id}:{method}",
+            style=ButtonStyle.SUCCESS,
+        )
+    )
+    builder.row(
+        inline_action(
+            text="↩️ Choose another method" if language == "en" else "↩️ ሌላ የክፍያ መንገድ ይምረጡ",
+            callback_data=f"pay:back:{order_public_id}",
+            style=None,
+        )
+    )
+    return builder.as_markup()
+
+
 def payment_instructions_keyboard(
     *,
     payment_public_id: str,

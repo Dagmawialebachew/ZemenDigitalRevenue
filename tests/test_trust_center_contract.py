@@ -38,3 +38,13 @@ def test_payment_support_and_operational_categories_remain_connected() -> None:
         assert subject in support
         assert subject in control
     assert 'BotCommand(command="paysupport"' in commands
+
+
+def test_new_checkout_is_method_first_but_acceptance_stays_before_details() -> None:
+    payments_router = source("bot/routers/payments.py")
+    keyboards = source("bot/keyboards/payments.py")
+    assert "reply_markup=payment_method_keyboard(" in payments_router
+    assert 'F.data.startswith("pay:confirm:")' in payments_router
+    assert "await service.accept_purchase_policies(" in payments_router
+    assert "await service.select_method(" in payments_router
+    assert "payment_confirmation_keyboard" in keyboards

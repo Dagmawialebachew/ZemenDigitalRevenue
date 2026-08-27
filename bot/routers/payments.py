@@ -17,6 +17,7 @@ from bot.keyboards.payments import (
     payment_followup_keyboard,
     payment_instructions_keyboard,
     payment_method_keyboard,
+    payment_confirmation_keyboard,
     purchase_policy_keyboard,
     payment_reject_reason_keyboard,
     payment_review_keyboard,
@@ -24,9 +25,11 @@ from bot.keyboards.payments import (
 from bot.services.current_user import load_current_entry_context
 from bot.services.payment_copy import (
     checkout_intro,
+    checkout_intro_from_resume,
     external_checkout_url,
     money,
     payment_instructions,
+    payment_confirmation,
     resume_text,
 )
 
@@ -99,9 +102,11 @@ async def send_checkout(
         return
     await message.answer(
         checkout_intro(checkout, language=language),
-        reply_markup=purchase_policy_keyboard(
+        reply_markup=payment_method_keyboard(
             order_public_id=checkout.public_id,
             language=language,
+            cbe_enabled=cbe,
+            telebirr_enabled=telebirr,
         ),
     )
 
@@ -230,8 +235,72 @@ async def choose_payment_method(
     if current is None:
         await callback.answer("Please restart the bot", show_alert=True)
         return
+    await callback.answer("✅")
+    await callback.message.answer(
+        payment_confirmation(method=method, language=current.language_for_copy),
+        reply_markup=payment_confirmation_keyboard(
+            order_public_id=order_public_id,
+            method=method,
+            language=current.language_for_copy,
+        ),
+    )
+
+
+@router.callback_query(F.data.startswith("pay:back:"))
+async def back_to_payment_methods(
+    callback: CallbackQuery,
+    db: Database,
+    settings: Settings,
+) -> None:
+    if callback.message is None or callback.data is None:
+        await callback.answer()
+        return
+    current = await load_current_entry_context(db, telegram_user=callback.from_user)
+    if current is None:
+        await callback.answer("Please restart the bot", show_alert=True)
+        return
+    order_public_id = callback.data.split(":", 2)[2]
+    cbe, telebirr = _methods(settings)
+    await callback.answer()
+    await callback.message.answer(
+        checkout_intro_from_resume(await PaymentService(db, settings).resume_order_for_user(
+            user_id=current.user_id,
+            order_public_id=order_public_id,
+        )),
+        reply_markup=payment_method_keyboard(
+            order_public_id=order_public_id,
+            language=current.language_for_copy,
+            cbe_enabled=cbe,
+            telebirr_enabled=telebirr,
+        ),
+    )
+
+
+@router.callback_query(F.data.startswith("pay:confirm:"))
+async def confirm_payment_method(
+    callback: CallbackQuery,
+    db: Database,
+    settings: Settings,
+) -> None:
+    if callback.message is None or callback.data is None:
+        await callback.answer()
+        return
+    parts = callback.data.split(":", 3)
+    if len(parts) != 4:
+        await callback.answer("Invalid payment action", show_alert=True)
+        return
+    _, _, order_public_id, method = parts
+    current = await load_current_entry_context(db, telegram_user=callback.from_user)
+    if current is None:
+        await callback.answer("Please restart the bot", show_alert=True)
+        return
     service = PaymentService(db, settings)
     try:
+        await service.accept_purchase_policies(
+            user_id=current.user_id,
+            order_public_id=order_public_id,
+            language=current.language_for_copy,
+        )
         resume = await service.select_method(
             user_id=current.user_id,
             order_public_id=order_public_id,
