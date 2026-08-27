@@ -4,6 +4,7 @@ from html import escape
 from uuid import UUID
 
 from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -320,10 +321,14 @@ async def retarget_report_callback(callback: CallbackQuery, db: Database, settin
         return
     await callback.answer("Report refreshed")
     if callback.message:
-        await callback.message.edit_text(
-            _report_text(report),
-            reply_markup=_report_keyboard(broadcast_id),
-        )
+        try:
+            await callback.message.edit_text(
+                _report_text(report),
+                reply_markup=_report_keyboard(broadcast_id),
+            )
+        except TelegramBadRequest as exc:
+            if "message is not modified" not in str(exc).lower():
+                raise
 
 
 @router.message(Command("retarget_report"))

@@ -132,6 +132,7 @@ def test_retargeting_report_exposes_delivery_and_conversion_metrics() -> None:
     assert "Send exact preview to admins" in router
     assert "View report" in router
     assert "broadcast:click:" in router
+    assert '"message is not modified" not in str(exc).lower()' in router
     assert "broadcast_report" in service
     for field in ("sent_count", "blocked_count", "failed_count", "clickers", "conversions", "revenue_br"):
         assert field in repo
