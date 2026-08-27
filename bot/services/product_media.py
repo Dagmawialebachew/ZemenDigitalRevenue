@@ -181,8 +181,8 @@ async def send_sample_pdf(
         f"📄 <b>{escape(presentation.product_title or 'Zemen Digital')} — free preview</b>\n\n"
         "Review the sample first, then decide if the complete product fits your needs."
         if presentation.language == "en"
-        else f"📄 <b>{escape(presentation.product_title or 'Zemen Digital')} — ነፃ ናሙና</b>\n\n"
-        "መጀመሪያ ናሙናውን ይመልከቱ፤ ከዚያ ሙሉው ምርት ለእርስዎ የሚስማማ መሆኑን ይወስኑ።"
+        else f"📄 <b>{escape(presentation.product_title or 'Zemen Digital')} — ነፃ ሳምፕል</b>\n\n"
+        "መጀመሪያ ሳምፕሉን ይመልከቱ፤ ከዚያ ሙሉው ምርት ለእርስዎ የሚስማማ መሆኑን ይወስኑ።"
     )
     caption = escape(sample.caption[:900]) if sample.caption else fallback_caption
     for source in (_primary_source(sample, settings), _fallback_source(sample, settings)):

@@ -15,6 +15,7 @@ AUDIENCE_KINDS = {
     "referral_partners",
     "rejected_payment",
     "high_intent",
+    "high_intent_non_buyers",
     "custom",
 }
 
@@ -70,7 +71,7 @@ def normalize_audience(value: dict[str, Any] | None) -> Audience:
     score = None if score_raw in (None, "") else int(score_raw)
     if score is not None and not 0 <= score <= 1000:
         raise ValueError("minimum_intent_score must be between 0 and 1000")
-    if kind in {"product_buyers", "high_intent", "full_price_buyers", "discount_buyers"} and not product_id:
+    if kind in {"product_buyers", "high_intent", "high_intent_non_buyers", "full_price_buyers", "discount_buyers"} and not product_id:
         raise ValueError(f"{kind} audience requires product_id")
     return Audience(kind, language, stage, product_id, tracking_link_id, score)
 

@@ -320,7 +320,7 @@ async def sales_detail(
             "📄 The free PDF sample is being prepared. "
             "You can still review what is inside or ask us a question."
             if presentation.language == "en"
-            else "📄 ነፃው PDF ናሙና በዝግጅት ላይ ነው። እስከዚያ ድረስ የምርቱን ውስጥ ማየት ወይም ጥያቄ መጠየቅ ይችላሉ።"
+                else "📄 ነፃው PDF ሳምፕል በዝግጅት ላይ ነው። እስከዚያ ድረስ የምርቱን ውስጥ ማየት ወይም ጥያቄ መጠየቅ ይችላሉ።"
         )
         await callback.message.answer(unavailable, reply_markup=markup)
         run_background(

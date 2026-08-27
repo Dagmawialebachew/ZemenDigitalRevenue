@@ -126,7 +126,7 @@ def pitch_text(p: SalesPresentation) -> str:
         lines.extend(
             [
                 "",
-                "እውነተኛውን preview ይክፈቱ፣ ነፃውን ናሙና ይመልከቱ፣ ከዚያም በሚያገኙት ነገር ላይ ተመስርተው ይወስኑ።",
+                "እውነተኛውን preview ይክፈቱ፣ ነፃውን ሳምፕል ይመልከቱ፣ ከዚያም በሚያገኙት ነገር ላይ ተመስርተው ይወስኑ።",
             ]
         )
         if price:

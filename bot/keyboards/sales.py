@@ -18,7 +18,7 @@ def sales_keyboard(*, language: str, price_br: str | None, mini_app_url: str = "
         question = "🤔 I have a question"
     else:
         preview = "👀 ውስጡን አሳየኝ"
-        sample = "📄 ነፃ PDF ናሙና"
+        sample = "📄 ነፃ PDF ሳምፕል"
         store = "🌐 Mini App ላይ ክፈት"
         personalize = "✨ ምክሩን ለእኔ አስተካክል"
         buy = f"💚 ልግዛ · {price_br} ብር" if price_br else "💚 ልግዛ"
@@ -53,7 +53,7 @@ def after_detail_keyboard(*, language: str, price_br: str | None, mini_app_url: 
     )
     builder.row(inline_action(text=buy, callback_data="sales:buy", style=ButtonStyle.SUCCESS))
     if show_sample:
-        sample = "📄 Free PDF sample" if language == "en" else "📄 ነፃ PDF ናሙና"
+        sample = "📄 Free PDF sample" if language == "en" else "📄 ነፃ PDF ሳምፕል"
         builder.row(inline_action(text=sample, callback_data="sales:sample", style=None))
     if mini_app_url:
         store = "🌐 View in Mini App" if language == "en" else "🌐 Mini App ላይ ክፈት"

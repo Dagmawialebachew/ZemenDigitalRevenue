@@ -105,3 +105,26 @@ def test_s11_keeps_discount_commission_database_lock() -> None:
 def test_s11_still_has_no_redis() -> None:
     assert "redis" not in read("requirements.txt").lower()
     assert "redis" not in read("pyproject.toml").lower()
+
+
+def test_high_intent_retargeting_is_text_only_and_has_three_actions() -> None:
+    launcher = read("scripts/retargeting.py")
+    assert '"kind": "high_intent_non_buyers"' in launcher
+    assert '"creative": "text-only"' in launcher
+    assert launcher.count('"key": "buy"') == 2
+    assert launcher.count('"key": "preview"') == 2
+    assert launcher.count('"key": "sample"') == 2
+    assert "ሳምፕል" in launcher
+
+
+def test_retargeting_report_exposes_delivery_and_conversion_metrics() -> None:
+    router = read("bot/routers/retargeting.py")
+    service = read("backend/services/marketing.py")
+    repo = read("backend/repositories/marketing.py")
+    assert 'Command("retarget")' in router
+    assert 'Command("retarget_report")' in router
+    assert 'retarget:report:' in router
+    assert "View report" in router
+    assert "broadcast_report" in service
+    for field in ("sent_count", "blocked_count", "failed_count", "clickers", "conversions", "revenue_br"):
+        assert field in repo

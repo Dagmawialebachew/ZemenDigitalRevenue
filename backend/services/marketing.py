@@ -49,6 +49,13 @@ class MarketingService:
                 },
             }
 
+    async def broadcast_report(self, broadcast_id: UUID) -> dict[str, Any]:
+        async with self.db.acquire() as conn:
+            row = await self.repo.broadcast_report(conn, broadcast_id)
+        if row is None:
+            raise LookupError("Broadcast not found")
+        return dict(row)
+
     async def audience_count(self, definition: dict[str, Any]) -> int:
         audience = normalize_audience(definition)
         async with self.db.acquire() as conn:

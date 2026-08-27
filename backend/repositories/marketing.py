@@ -119,6 +119,14 @@ class MarketingRepository:
             OR ($1='high_intent' AND EXISTS (
                 SELECT 1 FROM user_product_journeys j WHERE j.user_id=u.id AND j.product_id=$4::uuid AND j.stage='high_intent'
             ))
+                        OR ($1='high_intent_non_buyers' AND NOT EXISTS (
+                                SELECT 1 FROM orders o WHERE o.user_id=u.id AND o.status='paid'
+                                    AND ($4::uuid IS NULL OR EXISTS (
+                                        SELECT 1 FROM order_items oi WHERE oi.order_id=o.id AND oi.product_id=$4::uuid
+                                    ))
+                        ) AND EXISTS (
+                                SELECT 1 FROM user_product_journeys j WHERE j.user_id=u.id AND j.product_id=$4::uuid AND j.stage='high_intent'
+                        ))
           )
         """
         return sql, args
@@ -191,6 +199,27 @@ class MarketingRepository:
     async def broadcast(self, conn: asyncpg.Connection, broadcast_id: UUID, for_update: bool = False) -> asyncpg.Record | None:
         lock = " FOR UPDATE" if for_update else ""
         return await conn.fetchrow(f"SELECT * FROM broadcasts WHERE id=$1{lock}", broadcast_id)
+
+    async def broadcast_report(self, conn: asyncpg.Connection, broadcast_id: UUID) -> asyncpg.Record | None:
+        return await conn.fetchrow(
+            """
+            SELECT b.id,b.name,b.status,b.created_at,b.started_at,b.completed_at,b.audience_snapshot_count,
+              COALESCE(count(br.*),0) AS recipients,
+              COALESCE(count(*) FILTER (WHERE br.status='sent'),0) AS sent_count,
+              COALESCE(count(*) FILTER (WHERE br.status='blocked'),0) AS blocked_count,
+              COALESCE(count(*) FILTER (WHERE br.status='failed'),0) AS failed_count,
+              COALESCE(count(*) FILTER (WHERE br.status='skipped'),0) AS skipped_count,
+              COALESCE(count(*) FILTER (WHERE br.clicked_at IS NOT NULL),0) AS clickers,
+              COALESCE(count(*) FILTER (WHERE br.converted_order_id IS NOT NULL),0) AS conversions,
+              COALESCE(sum(o.total_due_br) FILTER (WHERE o.status='paid'),0) AS revenue_br
+            FROM broadcasts b
+            LEFT JOIN broadcast_recipients br ON br.broadcast_id=b.id
+            LEFT JOIN orders o ON o.id=br.converted_order_id
+            WHERE b.id=$1
+            GROUP BY b.id
+            """,
+            broadcast_id,
+        )
 
     async def automation(self, conn: asyncpg.Connection, automation_id: UUID, for_update: bool = False) -> asyncpg.Record | None:
         lock = " FOR UPDATE" if for_update else ""
