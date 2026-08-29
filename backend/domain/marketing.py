@@ -211,7 +211,7 @@ def get_recovery_campaign_templates(
     off = str(offer_price_br)
 
     def _wrap(text: str, button_text: str) -> dict[str, Any]:
-        buttons = [{"key": "primary_buy", "text": button_text, "url": bot_url}] if bot_url else []
+        buttons = [{"key": "buy", "text": button_text, "callback_data": "retarget:action:buy"}]
         payload: dict[str, Any] = {"text": text.strip(), "buttons": buttons}
         if media:
             payload["media"] = media

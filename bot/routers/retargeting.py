@@ -57,7 +57,7 @@ async def _run_retarget_action(*, message: Message, db: Database, settings: Sett
             raise LookupError(f"Active product not found: {PRODUCT_SLUG}")
         await ConversationSessionRepository().set_focus_product(conn, user_id=user_id, product_id=product["id"])
 
-    if action == "buy":
+    if action in {"buy", "primary_buy"}:
         from bot.routers.payments import send_checkout
 
         await send_checkout(message=message, db=db, settings=settings, user_id=user_id, product_slug=PRODUCT_SLUG)
