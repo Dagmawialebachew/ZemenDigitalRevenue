@@ -140,24 +140,32 @@ class PaymentService:
             live = await self.repo.find_live_order_for_product(
                 conn, user_id=user_id, product_id=product["id"]
             )
+            offer_price = product["offer_price_br"]
             if live is not None:
-                item = await self.repo.order_product(
-                    conn, order_id=live["id"], language="am"
-                )
-                return CheckoutResult(
-                    order_id=live["id"],
-                    public_id=live["public_id"],
-                    product_id=product["id"],
-                    product_slug=product["slug"],
-                    product_title=item["title"] if item else product["slug"],
-                    regular_price_br=Decimal(str(product["regular_price_br"])),
-                    total_due_br=Decimal(str(live["total_due_br"])),
-                    pricing_type=live["pricing_type"],
-                    discount_br=Decimal(str(live["discount_total_br"])),
-                    commissionable=live["pricing_type"] == "regular" and Decimal(str(live["discount_total_br"])) == 0,
-                    status=live["status"],
-                    expires_at=live["expires_at"],
-                )
+                if offer_price is not None and Decimal(str(offer_price)) < Decimal(str(live["total_due_br"])):
+                    await conn.execute(
+                        "UPDATE orders SET status = 'cancelled', updated_at = now() WHERE id = $1",
+                        live["id"],
+                    )
+                    live = None
+                else:
+                    item = await self.repo.order_product(
+                        conn, order_id=live["id"], language="am"
+                    )
+                    return CheckoutResult(
+                        order_id=live["id"],
+                        public_id=live["public_id"],
+                        product_id=product["id"],
+                        product_slug=product["slug"],
+                        product_title=item["title"] if item else product["slug"],
+                        regular_price_br=Decimal(str(product["regular_price_br"])),
+                        total_due_br=Decimal(str(live["total_due_br"])),
+                        pricing_type=live["pricing_type"],
+                        discount_br=Decimal(str(live["discount_total_br"])),
+                        commissionable=live["pricing_type"] == "regular" and Decimal(str(live["discount_total_br"])) == 0,
+                        status=live["status"],
+                        expires_at=live["expires_at"],
+                    )
 
             session = await self.sessions.get(conn, user_id=user_id)
             tracking_link_id = session["focus_tracking_link_id"] if session else None

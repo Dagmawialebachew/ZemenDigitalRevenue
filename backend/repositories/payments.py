@@ -17,9 +17,9 @@ class PaymentRepository:
             """
             SELECT
                 p.*,
-                offer.id AS offer_id,
-                offer.offer_price_br,
-                offer.expires_at AS offer_expires_at,
+                COALESCE(offer.id, rule_offer.id) AS offer_id,
+                COALESCE(offer.offer_price_br, rule_offer.target_price_br) AS offer_price_br,
+                COALESCE(offer.expires_at, rule_offer.expires_at) AS offer_expires_at,
                 (ent.user_id IS NOT NULL) AS is_owned
             FROM products p
             LEFT JOIN LATERAL (
@@ -33,6 +33,15 @@ class PaymentRepository:
                 ORDER BY co.created_at DESC
                 LIMIT 1
             ) offer ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT dr.id, dr.target_price_br, (now() + interval '24 hours') AS expires_at
+                FROM discount_rules dr
+                WHERE dr.product_id = p.id
+                  AND dr.is_active = TRUE
+                  AND p.discounts_enabled = TRUE
+                ORDER BY dr.target_price_br ASC, dr.created_at DESC
+                LIMIT 1
+            ) rule_offer ON TRUE
             LEFT JOIN entitlements ent
                 ON ent.user_id = $1
                AND ent.product_id = p.id
