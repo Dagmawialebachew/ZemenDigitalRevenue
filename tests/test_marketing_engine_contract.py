@@ -144,14 +144,21 @@ def test_flash_discount_commander_contract() -> None:
     factory = read("bot/factory.py")
 
     assert 'Command("discount")' in router
+    assert 'Command("remind")' in router
     assert "admin:disc:preview:" in router
     assert "admin:disc:launch:" in router
     assert "admin:disc:cancel" in router
+    assert "admin:remind:preview" in router
+    assert "admin:remind:launch" in router
+    assert "admin:remind:cancel" in router
     assert "_progress_bar" in router
     assert "_direct_fast_dispatcher" in router
+    assert "_direct_fast_reminder_dispatcher" in router
 
     assert "discount_control_card_keyboard" in keyboards
     assert "discount_preview_cta_keyboard" in keyboards
+    assert "reminder_control_card_keyboard" in keyboards
+    assert "reminder_preview_cta_keyboard" in keyboards
     assert "sales:buy" in keyboards
 
     assert "admin_campaign_router" in factory

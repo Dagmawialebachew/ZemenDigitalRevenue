@@ -25,6 +25,8 @@ from backend.services.marketing import MarketingService
 from bot.keyboards.admin_campaign import (
     discount_control_card_keyboard,
     discount_preview_cta_keyboard,
+    reminder_control_card_keyboard,
+    reminder_preview_cta_keyboard,
 )
 from bot.keyboards.primitives import inline_action
 
@@ -563,5 +565,289 @@ async def cancel_discount_callback(
         await callback.message.edit_text(
             "❌ <b>Flash Discount Commander Cancelled.</b>\n\n"
             "<i>No discount rules were created and no broadcasts were dispatched.</i>"
+        )
+    await callback.answer("Cancelled", show_alert=False)
+
+
+# ──────────────────────────  /REMIND COMMANDER  ──────────────────────────
+
+def _get_reminder_copy() -> tuple[str, str]:
+    am = (
+        "<b>{first_name}፣ ሰላም 👋</b>\n\n"
+        "⚠️ <b>ክፍያ ፈጽመው የከፈሉበትን ደረሰኝ (Screenshot) ያልላኩ ደንበኞች፦</b>\n\n"
+        "የከፈሉበትን የTelebirr ወይም CBE ደረሰኝ/Screenshot ከታች ያለውን <b>«📸 ደረሰኝ/Screenshot አስገቡ»</b> የሚለውን ቁልፍ በመጫን ወዲያውኑ ያስገቡ።\n\n"
+        "ደረሰኙ እንደደረሰን መጽሐፉን ወዲያውኑ በቴሌግራም ያገኛሉ! 👇"
+    )
+    en = (
+        "<b>Hello {first_name} 👋</b>\n\n"
+        "⚠️ <b>If you have already made your payment but haven't sent the receipt:</b>\n\n"
+        "Please tap the <b>«📸 Upload Receipt/Screenshot»</b> button below to submit your transfer screenshot.\n\n"
+        "As soon as you upload it, your complete guide will be delivered immediately! 👇"
+    )
+    return am, en
+
+
+@router.message(Command("remind"))
+@router.message(Command("reminder"))
+async def remind_command_handler(
+    message: Message,
+    db: Database,
+    settings: Settings,
+) -> None:
+    if not message.from_user or not _is_admin(message.from_user.id, settings):
+        return
+
+    async with db.acquire() as conn:
+        count = int(
+            await conn.fetchval(
+                """
+                SELECT count(DISTINCT u.id)
+                FROM users u
+                WHERE u.status = 'active'
+                  AND u.is_bot_blocked = FALSE
+                  AND (
+                    EXISTS (
+                      SELECT 1 FROM orders o
+                      WHERE o.user_id = u.id AND o.status IN ('created', 'awaiting_payment', 'proof_submitted', 'under_review')
+                    )
+                    OR EXISTS (
+                      SELECT 1 FROM user_product_journeys j
+                      WHERE j.user_id = u.id AND j.stage IN ('high_intent', 'checkout_started', 'proof_uploaded')
+                    )
+                    OR EXISTS (
+                      SELECT 1 FROM payments p
+                      WHERE p.user_id = u.id AND p.status IN ('awaiting_proof', 'pending_review', 'rejected')
+                    )
+                  )
+                  AND NOT EXISTS (
+                    SELECT 1 FROM orders o
+                    WHERE o.user_id = u.id AND o.status = 'paid'
+                  )
+                """
+            )
+            or 0
+        )
+
+    card_text = (
+        "📸 <b>RECEIPT REMINDER COMMANDER (/remind)</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👥 <b>Target Audience:</b> <b>{count}</b> buyers awaiting proof\n"
+        "🏷 <b>Filter:</b> Initiated checkout / payment without approved receipt\n\n"
+        "📝 <b>Message Angle:</b>\n"
+        "<i>«ክፍያ ፈጽመው ደረሰኝ ያልላኩ ደንበኞች ከታች ያለውን ቁልፍ በመጫን ያስገቡ...»</i>\n\n"
+        "🔘 <b>Action Button:</b> <code>[ 📸 ደረሰኝ/Screenshot አስገቡ ]</code>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "Select an action to proceed:"
+    )
+
+    await message.answer(card_text, reply_markup=reminder_control_card_keyboard())
+
+
+@router.callback_query(F.data == "admin:remind:preview")
+async def preview_reminder_callback(
+    callback: CallbackQuery,
+    settings: Settings,
+) -> None:
+    if not callback.from_user or not _is_admin(callback.from_user.id, settings):
+        await callback.answer("Unauthorized", show_alert=True)
+        return
+
+    first_name = callback.from_user.first_name or "ውድ ደንበኛችን"
+    am_copy, _ = _get_reminder_copy()
+    rendered = (
+        "<b>[PREVIEW — RECEIPT REMINDER MESSAGE]</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        + am_copy.replace("{first_name}", escape(first_name))
+    )
+
+    if callback.message:
+        await callback.message.answer(rendered, reply_markup=reminder_preview_cta_keyboard())
+    await callback.answer("✅ Preview sent above ⬆️", show_alert=False)
+
+
+async def _direct_fast_reminder_dispatcher(
+    bot: Bot,
+    chat_id: int,
+    message_id: int,
+    db: Database,
+    recipients: list[dict[str, object]],
+) -> None:
+    am_template, en_template = _get_reminder_copy()
+    markup = reminder_preview_cta_keyboard()
+    total = len(recipients)
+
+    sent_count = 0
+    blocked_count = 0
+    failed_count = 0
+    last_ui_update = asyncio.get_event_loop().time()
+    sem = asyncio.Semaphore(25)
+
+    async def _send_one(r: dict[str, object]) -> None:
+        nonlocal sent_count, blocked_count, failed_count, last_ui_update
+        async with sem:
+            telegram_id = int(r["telegram_id"])
+            user_id = r["user_id"]
+            lang = str(r["language"] or "am")
+            raw_name = str(r["first_name"] or "").strip()
+            name_clean = escape(raw_name) if raw_name else ("ውድ ደንበኛችን" if lang == "am" else "Friend")
+
+            tpl = en_template if lang == "en" else am_template
+            msg_text = tpl.replace("{first_name}", name_clean)
+
+            try:
+                await bot.send_message(chat_id=telegram_id, text=msg_text, reply_markup=markup)
+                sent_count += 1
+            except TelegramForbiddenError:
+                blocked_count += 1
+                with contextlib.suppress(Exception):
+                    async with db.transaction() as conn:
+                        await conn.execute("UPDATE users SET is_bot_blocked = TRUE, updated_at = now() WHERE id = $1", user_id)
+            except TelegramRetryAfter as retry:
+                await asyncio.sleep(float(retry.retry_after))
+                try:
+                    await bot.send_message(chat_id=telegram_id, text=msg_text, reply_markup=markup)
+                    sent_count += 1
+                except Exception:
+                    failed_count += 1
+            except Exception:
+                failed_count += 1
+
+            now = asyncio.get_event_loop().time()
+            if now - last_ui_update >= 1.5:
+                last_ui_update = now
+                processed = sent_count + blocked_count + failed_count
+                p_bar = _progress_bar(processed, total)
+                ui_text = (
+                    "<b>RECEIPT REMINDER DISPATCH</b>\n"
+                    "━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"👥 <b>Total Target:</b> {total} pending-proof buyers\n\n"
+                    "<b>Status:</b> <code>🚀 DISPATCHING (FAST)</code>\n"
+                    f"<b>Progress:</b> {p_bar}\n\n"
+                    f"  • ✅ <b>Sent:</b> {sent_count}\n"
+                    f"  • 🚫 <b>Bot Blocked:</b> {blocked_count}\n"
+                    f"  • ⚠️ <b>Failed:</b> {failed_count}\n"
+                    f"  • ⏳ <b>Remaining:</b> {max(0, total - processed)}\n"
+                    "━━━━━━━━━━━━━━━━━━━━━\n"
+                    "<i>⚡️ High-speed direct delivery in progress...</i>"
+                )
+                try:
+                    await bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=ui_text)
+                except Exception:
+                    pass
+
+    tasks = [_send_one(r) for r in recipients]
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+    p_bar_final = _progress_bar(sent_count + blocked_count + failed_count, total)
+    final_text = (
+        "<b>RECEIPT REMINDER DISPATCH</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👥 <b>Total Target:</b> {total} pending-proof buyers\n\n"
+        "<b>Status:</b> <code>✅ COMPLETED</code>\n"
+        f"<b>Progress:</b> {p_bar_final}\n\n"
+        f"  • ✅ <b>Delivered:</b> {sent_count}\n"
+        f"  • 🚫 <b>Bot Blocked:</b> {blocked_count}\n"
+        f"  • ⚠️ <b>Failed:</b> {failed_count}\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "🎉 <b>Receipt upload reminder sent to all pending buyers!</b>"
+    )
+    try:
+        await bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=final_text)
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data == "admin:remind:launch")
+async def launch_reminder_callback(
+    callback: CallbackQuery,
+    db: Database,
+    settings: Settings,
+    bot: Bot,
+) -> None:
+    if not callback.from_user or not _is_admin(callback.from_user.id, settings):
+        await callback.answer("Unauthorized", show_alert=True)
+        return
+
+    if callback.message is None:
+        await callback.answer("Session expired", show_alert=True)
+        return
+
+    await callback.answer("🚀 Launching receipt reminder broadcast...", show_alert=False)
+
+    async with db.acquire() as conn:
+        recipients = await conn.fetch(
+            """
+            SELECT DISTINCT u.id AS user_id, u.telegram_id, u.first_name, u.is_bot_blocked,
+                   COALESCE(u.preferred_language, 'am') AS language
+            FROM users u
+            WHERE u.status = 'active'
+              AND u.is_bot_blocked = FALSE
+              AND (
+                EXISTS (
+                  SELECT 1 FROM orders o
+                  WHERE o.user_id = u.id AND o.status IN ('created', 'awaiting_payment', 'proof_submitted', 'under_review')
+                )
+                OR EXISTS (
+                  SELECT 1 FROM user_product_journeys j
+                  WHERE j.user_id = u.id AND j.stage IN ('high_intent', 'checkout_started', 'proof_uploaded')
+                )
+                OR EXISTS (
+                  SELECT 1 FROM payments p
+                  WHERE p.user_id = u.id AND p.status IN ('awaiting_proof', 'pending_review', 'rejected')
+                )
+              )
+              AND NOT EXISTS (
+                SELECT 1 FROM orders o
+                WHERE o.user_id = u.id AND o.status = 'paid'
+              )
+            ORDER BY u.id
+            """
+        )
+
+    total = len(recipients)
+    if total == 0:
+        await callback.message.edit_text("ℹ️ <b>No pending-proof buyers found right now.</b>")
+        return
+
+    initial_text = (
+        "<b>RECEIPT REMINDER DISPATCH</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👥 <b>Total Target:</b> {total} pending-proof buyers\n\n"
+        "<b>Status:</b> <code>🚀 DISPATCHING (FAST)</code>\n"
+        "<b>Progress:</b> [░░░░░░░░░░] 0%\n\n"
+        "  • ✅ <b>Sent:</b> 0\n"
+        "  • 🚫 <b>Bot Blocked:</b> 0\n"
+        f"  • ⏳ <b>Remaining:</b> {total}\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "<i>⚡️ Sending receipt upload reminders...</i>"
+    )
+
+    await callback.message.edit_text(initial_text)
+
+    # Spawn fast dispatcher task in background
+    asyncio.create_task(
+        _direct_fast_reminder_dispatcher(
+            bot=bot,
+            chat_id=callback.message.chat.id,
+            message_id=callback.message.message_id,
+            db=db,
+            recipients=[dict(r) for r in recipients],
+        )
+    )
+
+
+@router.callback_query(F.data == "admin:remind:cancel")
+async def cancel_reminder_callback(
+    callback: CallbackQuery,
+    settings: Settings,
+) -> None:
+    if not callback.from_user or not _is_admin(callback.from_user.id, settings):
+        await callback.answer("Unauthorized", show_alert=True)
+        return
+
+    if callback.message:
+        await callback.message.edit_text(
+            "❌ <b>Receipt Reminder Commander Cancelled.</b>\n\n"
+            "<i>No reminder messages were sent.</i>"
         )
     await callback.answer("Cancelled", show_alert=False)

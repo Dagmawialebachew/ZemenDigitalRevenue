@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from decimal import Decimal
 from aiogram.enums import ButtonStyle
@@ -47,6 +47,44 @@ def discount_preview_cta_keyboard(
         inline_action(
             text=f"🔥 አሁን ይግዙ — {price_br} ብር",
             callback_data="sales:buy",
+            style=ButtonStyle.SUCCESS,
+        )
+    )
+    return builder.as_markup()
+
+
+def reminder_control_card_keyboard() -> InlineKeyboardMarkup:
+    """Builds interactive action buttons for the /remind control card."""
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        inline_action(
+            text="👁 Send Preview to Me",
+            callback_data="admin:remind:preview",
+            style=ButtonStyle.PRIMARY,
+        )
+    )
+    builder.row(
+        inline_action(
+            text="🚀 Launch Reminder",
+            callback_data="admin:remind:launch",
+            style=ButtonStyle.SUCCESS,
+        ),
+        inline_action(
+            text="❌ Cancel",
+            callback_data="admin:remind:cancel",
+            style=ButtonStyle.DANGER,
+        ),
+    )
+    return builder.as_markup()
+
+
+def reminder_preview_cta_keyboard() -> InlineKeyboardMarkup:
+    """Builds customer-facing receipt upload CTA for admin preview."""
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        inline_action(
+            text="📸 ደረሰኝ/Screenshot አስገቡ",
+            callback_data="retarget:action:buy",
             style=ButtonStyle.SUCCESS,
         )
     )
