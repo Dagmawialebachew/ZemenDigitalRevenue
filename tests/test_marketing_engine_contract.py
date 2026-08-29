@@ -136,3 +136,23 @@ def test_retargeting_report_exposes_delivery_and_conversion_metrics() -> None:
     assert "broadcast_report" in service
     for field in ("sent_count", "blocked_count", "failed_count", "clickers", "conversions", "revenue_br"):
         assert field in repo
+
+
+def test_flash_discount_commander_contract() -> None:
+    router = read("bot/routers/admin_campaign.py")
+    keyboards = read("bot/keyboards/admin_campaign.py")
+    factory = read("bot/factory.py")
+
+    assert 'Command("discount")' in router
+    assert "admin:disc:preview:" in router
+    assert "admin:disc:launch:" in router
+    assert "admin:disc:cancel" in router
+    assert "_progress_bar" in router
+    assert "_poll_broadcast_progress" in router
+
+    assert "discount_control_card_keyboard" in keyboards
+    assert "discount_preview_cta_keyboard" in keyboards
+    assert "sales:buy" in keyboards
+
+    assert "admin_campaign_router" in factory
+    assert "start_router,\n        admin_campaign_router," in factory or "start_router,\r\n        admin_campaign_router," in factory
