@@ -148,7 +148,7 @@ def test_flash_discount_commander_contract() -> None:
     assert "admin:disc:launch:" in router
     assert "admin:disc:cancel" in router
     assert "_progress_bar" in router
-    assert "_poll_broadcast_progress" in router
+    assert "_direct_fast_dispatcher" in router
 
     assert "discount_control_card_keyboard" in keyboards
     assert "discount_preview_cta_keyboard" in keyboards

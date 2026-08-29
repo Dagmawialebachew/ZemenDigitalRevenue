@@ -1,24 +1,32 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import asyncio
+import contextlib
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from html import escape
+import secrets
 from uuid import UUID
 
 from aiogram import Bot, F, Router
-from aiogram.enums import ParseMode
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.enums import ButtonStyle, ParseMode
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramRetryAfter
 from aiogram.filters import Command, CommandObject
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from backend.core.config import Settings
 from backend.db.pool import Database
+from backend.domain.marketing import Audience, normalize_audience
+from backend.repositories.events import EventRepository
+from backend.repositories.marketing import MarketingRepository
 from backend.repositories.products import ProductRepository
 from backend.services.marketing import MarketingService
 from bot.keyboards.admin_campaign import (
     discount_control_card_keyboard,
     discount_preview_cta_keyboard,
 )
+from bot.keyboards.primitives import inline_action
 
 router = Router(name="admin_campaign")
 DEFAULT_PRICE = Decimal("299.00")
@@ -36,6 +44,38 @@ def _progress_bar(sent: int, total: int, width: int = 10) -> str:
     filled = int(round(pct * width))
     bar = "█" * filled + "░" * (width - filled)
     return f"[{bar}] {int(pct * 100)}%"
+
+
+def _get_campaign_copy(*, price: int | Decimal, regular_price: int | Decimal) -> tuple[str, str]:
+    p = str(int(price) if price % 1 == 0 else price)
+    reg = str(int(regular_price) if regular_price % 1 == 0 else regular_price)
+
+    am = (
+        "<b>{first_name}፣ ዛሬ ልዩ ነገር አለዎት! 🚨👇</b>\n\n"
+        "በዚህ ሳምንት ብቻ <b>52+ ሰዎች</b> «AI ከዜሮ» መመሪያን ገዝተው ስራቸውን እያቀለሉ ነው። 💡\n\n"
+        f"⏳ <b>ዛሬ ብቻ — {p} ብር!</b> (ከ{reg} ብር በ-45% ቅናሽ)\n\n"
+        "🎯 <b>በውስጡ ምን ያገኛሉ?</b>\n"
+        "• 129 ገጽ ሙሉ በሙሉ በአማርኛ የተዘጋጀ ተግባራዊ መመሪያ 📘\n"
+        "• 27+ ዝግጁ የሆኑ Copy-Paste Prompts ⚡️\n"
+        "• ለቢሮ፣ ለሪፖርቶች፣ ለCVና ለንግድ ሽያጭ የተዘጋጁ AI Workflows 💼\n"
+        "• በስልክዎ ብቻ የሚተገበር፤ ምንም Coding አይጠይቅም 📱\n\n"
+        f"⏰ ይህ የ{p} ብር ልዩ ዋጋ <b>ዛሬ ማታ 6 ሰአት ላይ ያበቃል!</b> ከዚያ በኋላ ወደ {reg} ብር ይመለሳል።\n\n"
+        "ጥያቄው ቀላል ነው፦ <b>ይቀራሉ ወይስ ይቀላቀላሉ?</b> 👇"
+    )
+
+    en = (
+        "<b>{first_name}, special opportunity for you today! 🚨👇</b>\n\n"
+        "<b>52+ professionals & business owners</b> bought “AI From Zero” this week to supercharge their work! 💡\n\n"
+        f"⏳ <b>TODAY ONLY — {p} Br!</b> (Save 45% off the {reg} Br regular price)\n\n"
+        "🎯 <b>What's included inside?</b>\n"
+        "• Complete 129-page practical AI guide 📘\n"
+        "• 27+ ready-to-use copy-paste prompts ⚡️\n"
+        "• Step-by-step AI workflows for work, career & business 💼\n"
+        "• 100% mobile-friendly — zero coding needed 📱\n\n"
+        f"⏰ This {p} Br flash price <b>EXPIRES tonight at midnight!</b> After that, it returns to {reg} Br.\n\n"
+        "<b>Join now before the price changes</b> 👇"
+    )
+    return am, en
 
 
 async def _get_campaign_context(
@@ -61,8 +101,6 @@ async def _get_campaign_context(
         if product is None:
             return None
 
-        # Reachable non-buyers calculation:
-        # active, not blocked, no paid orders for product, no in-flight payments under review
         count = int(
             await conn.fetchval(
                 """
@@ -153,7 +191,6 @@ async def discount_command_handler(
     if not message.from_user or not _is_admin(message.from_user.id, settings):
         return
 
-    # Parse arguments: /discount [price] [slug]
     price = DEFAULT_PRICE
     slug = DEFAULT_SLUG
 
@@ -203,104 +240,179 @@ async def preview_discount_callback(
         await callback.answer("Product not found", show_alert=True)
         return
 
-    first_name = callback.from_user.first_name or "ይቅርታ"
-    title_am = str(ctx["title_am"])
-    regular_price = int(Decimal(str(ctx["regular_price_br"])))
-    price_display = int(price) if price % 1 == 0 else price
-
-    preview_text = (
+    first_name = callback.from_user.first_name or "ውድ ደንበኛችን"
+    regular_price = Decimal(str(ctx["regular_price_br"]))
+    am_copy, _ = _get_campaign_copy(price=price, regular_price=regular_price)
+    rendered_text = (
         "<b>[PREVIEW — EXACT RECIPIENT MESSAGE]</b>\n"
         "━━━━━━━━━━━━━━━━━━━━━\n"
-        f"{escape(first_name)}፣ ይህን ማወቅ አለብዎት...\n\n"
-        f"በዚህ ሳምንት ብቻ 52+ ሰዎች {escape(title_am)} ገዝተዋል። ከእነሱ ጋር ለምን አልተቀላቀሉም?\n\n"
-        f"ዛሬ ብቻ — {price_display} ብር (ከ{regular_price} ብር ይልቅ)\n\n"
-        "ሁሉም ሰው AI እየተማረ ነው። ኢትዮጵያ ውስጥ AI ለሥራ፣ ለንግድ፣ ለትምህርት — ሁሉም እየተጠቀመ ነው።\n\n"
-        "ጥያቄው ይህ ነው: ይቀራሉ ወይስ ይቀላቀላሉ?\n\n"
-        "ዋጋው ዛሬ ማታ 6 ሰአት ላይ ያበቃል ⏰"
+        + am_copy.replace("{first_name}", escape(first_name))
     )
 
-    cta_keyboard = discount_preview_cta_keyboard(price_br=price_display)
+    cta_keyboard = discount_preview_cta_keyboard(
+        price_br=int(price) if price % 1 == 0 else price,
+    )
 
     if callback.message:
-        await callback.message.answer(preview_text, reply_markup=cta_keyboard)
+        await callback.message.answer(rendered_text, reply_markup=cta_keyboard)
     await callback.answer("✅ Preview sent above ⬆️", show_alert=False)
 
 
-async def _poll_broadcast_progress(
+async def _direct_fast_dispatcher(
     bot: Bot,
     chat_id: int,
     message_id: int,
-    broadcast_ids: list[UUID],
+    broadcast_id: UUID,
     db: Database,
-    total_recipients: int,
-    campaign_name: str,
+    price: Decimal,
+    regular_price: Decimal,
 ) -> None:
-    """Polls database and edits Control Card every 2.5s until all broadcasts reach terminal status."""
-    marketing = MarketingService(db, Settings())
-    start_time = asyncio.get_event_loop().time()
-    max_duration = 300  # 5 minutes safety timeout
+    """Dispatches messages directly and concurrently at 25 msgs/sec while updating progress live."""
+    am_template, en_template = _get_campaign_copy(price=price, regular_price=regular_price)
+    price_display = int(price) if price % 1 == 0 else price
 
-    while asyncio.get_event_loop().time() - start_time < max_duration:
-        await asyncio.sleep(2.5)
+    cta_builder = InlineKeyboardBuilder()
+    cta_builder.row(
+        inline_action(
+            text=f"🔥 አሁን ይግዙ — {price_display} ብር",
+            callback_data="retarget:action:buy",
+            style=ButtonStyle.SUCCESS,
+        )
+    )
+    markup = cta_builder.as_markup()
 
-        total_sent = 0
-        total_blocked = 0
-        total_failed = 0
-        total_queued = 0
-        all_completed = True
-
-        for b_id in broadcast_ids:
-            try:
-                report = await marketing.broadcast_report(b_id)
-                status = str(report.get("status", ""))
-                if status in {"scheduled", "sending"}:
-                    all_completed = False
-
-                sent = int(report.get("sent_count", 0))
-                blocked = int(report.get("blocked_count", 0))
-                failed = int(report.get("failed_count", 0))
-                recipients = int(report.get("recipients", 0))
-                queued = max(0, recipients - (sent + blocked + failed))
-
-                total_sent += sent
-                total_blocked += blocked
-                total_failed += failed
-                total_queued += queued
-            except Exception:
-                pass
-
-        processed = total_sent + total_blocked + total_failed
-        progress_bar = _progress_bar(processed, total_recipients)
-        is_done = all_completed and total_queued == 0
-
-        status_badge = "✅ COMPLETED" if is_done else "🚀 DISPATCHING"
-
-        update_text = (
-            f"<b>BROADCAST DISPATCH CONTROL</b>\n"
-            f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📦 <b>Campaign:</b> {escape(campaign_name)}\n"
-            f"👥 <b>Total Target:</b> {total_recipients} recipients\n\n"
-            f"<b>Status:</b> <code>{status_badge}</code>\n"
-            f"<b>Progress:</b> {progress_bar}\n\n"
-            f"  • ✅ <b>Sent:</b> {total_sent}\n"
-            f"  • 🚫 <b>Bot Blocked:</b> {total_blocked}\n"
-            f"  • ⚠️ <b>Failed:</b> {total_failed}\n"
-            f"  • ⏳ <b>Remaining:</b> {total_queued}\n"
-            f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"<i>{'All messages delivered successfully! 🎉' if is_done else '⚡️ Throttled to comply with Telegram flood limits.'}</i>"
+    async with db.acquire() as conn:
+        recipients = await conn.fetch(
+            """
+            SELECT br.user_id, u.telegram_id, u.first_name, u.is_bot_blocked,
+                   COALESCE(u.preferred_language, 'am') AS language
+            FROM broadcast_recipients br
+            JOIN users u ON u.id = br.user_id
+            WHERE br.broadcast_id = $1 AND br.status = 'queued'
+            """,
+            broadcast_id,
         )
 
-        try:
+    total = len(recipients)
+    if total == 0:
+        with contextlib.suppress(Exception):
             await bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=message_id,
-                text=update_text,
+                text="✅ <b>All non-buyers have already received this campaign!</b>",
             )
-        except TelegramBadRequest:
-            pass  # Message content unchanged
+        return
 
-        if is_done:
-            break
+    sent_count = 0
+    blocked_count = 0
+    failed_count = 0
+    last_ui_update = asyncio.get_event_loop().time()
+
+    sem = asyncio.Semaphore(25)  # Safe high concurrency within Telegram limits
+
+    async def _send_one(r: dict[str, object]) -> None:
+        nonlocal sent_count, blocked_count, failed_count, last_ui_update
+        async with sem:
+            telegram_id = int(r["telegram_id"])
+            user_id = r["user_id"]
+            lang = str(r["language"] or "am")
+            raw_name = str(r["first_name"] or "").strip()
+            name_clean = escape(raw_name) if raw_name else ("ውድ ደንበኛችን" if lang == "am" else "Friend")
+
+            tpl = en_template if lang == "en" else am_template
+            msg_text = tpl.replace("{first_name}", name_clean)
+
+            try:
+                msg = await bot.send_message(chat_id=telegram_id, text=msg_text, reply_markup=markup)
+                async with db.transaction() as conn:
+                    await conn.execute(
+                        "UPDATE broadcast_recipients SET status='sent', sent_at=now(), telegram_message_id=$3, updated_at=now() WHERE broadcast_id=$1 AND user_id=$2",
+                        broadcast_id, user_id, msg.message_id,
+                    )
+                sent_count += 1
+            except TelegramForbiddenError:
+                async with db.transaction() as conn:
+                    await conn.execute("UPDATE users SET is_bot_blocked=TRUE, updated_at=now() WHERE id=$1", user_id)
+                    await conn.execute(
+                        "UPDATE broadcast_recipients SET status='blocked', last_error='bot blocked', updated_at=now() WHERE broadcast_id=$1 AND user_id=$2",
+                        broadcast_id, user_id,
+                    )
+                blocked_count += 1
+            except TelegramRetryAfter as retry:
+                await asyncio.sleep(float(retry.retry_after))
+                try:
+                    msg = await bot.send_message(chat_id=telegram_id, text=msg_text, reply_markup=markup)
+                    async with db.transaction() as conn:
+                        await conn.execute(
+                            "UPDATE broadcast_recipients SET status='sent', sent_at=now(), telegram_message_id=$3, updated_at=now() WHERE broadcast_id=$1 AND user_id=$2",
+                            broadcast_id, user_id, msg.message_id,
+                        )
+                    sent_count += 1
+                except Exception:
+                    failed_count += 1
+            except Exception as exc:
+                async with db.transaction() as conn:
+                    await conn.execute(
+                        "UPDATE broadcast_recipients SET status='failed', last_error=$3, updated_at=now() WHERE broadcast_id=$1 AND user_id=$2",
+                        broadcast_id, user_id, str(exc)[:500],
+                    )
+                failed_count += 1
+
+            # Throttle UI edits to once every 1.5 seconds
+            now = asyncio.get_event_loop().time()
+            if now - last_ui_update >= 1.5:
+                last_ui_update = now
+                processed = sent_count + blocked_count + failed_count
+                remaining = max(0, total - processed)
+                p_bar = _progress_bar(processed, total)
+                ui_text = (
+                    f"<b>BROADCAST DISPATCH CONTROL</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"📦 <b>Campaign:</b> {price_display} Br Flash Recovery\n"
+                    f"👥 <b>Total Target:</b> {total} recipients\n\n"
+                    f"<b>Status:</b> <code>🚀 DISPATCHING (FAST)</code>\n"
+                    f"<b>Progress:</b> {p_bar}\n\n"
+                    f"  • ✅ <b>Sent:</b> {sent_count}\n"
+                    f"  • 🚫 <b>Bot Blocked:</b> {blocked_count}\n"
+                    f"  • ⚠️ <b>Failed:</b> {failed_count}\n"
+                    f"  • ⏳ <b>Remaining:</b> {remaining}\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"<i>⚡️ High-speed direct delivery in progress...</i>"
+                )
+                try:
+                    await bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=ui_text)
+                except Exception:
+                    pass
+
+    # Launch all concurrent tasks
+    tasks = [_send_one(r) for r in recipients]
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Mark broadcast as sent
+    async with db.transaction() as conn:
+        await conn.execute(
+            "UPDATE broadcasts SET status='sent', completed_at=now(), updated_at=now() WHERE id=$1",
+            broadcast_id,
+        )
+
+    p_bar_final = _progress_bar(sent_count + blocked_count + failed_count, total)
+    final_text = (
+        f"<b>BROADCAST DISPATCH CONTROL</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📦 <b>Campaign:</b> {price_display} Br Flash Recovery\n"
+        f"👥 <b>Total Target:</b> {total} recipients\n\n"
+        f"<b>Status:</b> <code>✅ COMPLETED</code>\n"
+        f"<b>Progress:</b> {p_bar_final}\n\n"
+        f"  • ✅ <b>Delivered:</b> {sent_count}\n"
+        f"  • 🚫 <b>Bot Blocked:</b> {blocked_count}\n"
+        f"  • ⚠️ <b>Failed:</b> {failed_count}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🎉 <b>Flash campaign sent to all recipients!</b>"
+    )
+    try:
+        await bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=final_text)
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data.startswith("admin:disc:launch:"))
@@ -325,55 +437,116 @@ async def launch_discount_callback(
         await callback.answer("Session expired", show_alert=True)
         return
 
-    await callback.answer("🚀 Launching flash discount campaign...", show_alert=False)
+    await callback.answer("🚀 Starting fast one-time broadcast...", show_alert=False)
 
     marketing = MarketingService(db, settings, bot=bot)
-    try:
-        launch_res = await marketing.launch_full_recovery_campaign(
-            admin_telegram_id=callback.from_user.id,
-            data={"target_price_br": str(price)},
-        )
-    except Exception as exc:
-        await callback.message.edit_text(
-            f"❌ <b>Campaign Launch Failed</b>\n\n<code>{escape(str(exc))}</code>"
-        )
-        return
+    repo = MarketingRepository()
 
-    offers_created = launch_res.get("offers_created", 0)
-    scheduled_broadcasts = launch_res.get("scheduled_broadcasts", [])
-    broadcast_ids = [UUID(str(b["id"])) for b in scheduled_broadcasts if "id" in b]
-    total_recipients = sum(int(b.get("recipients", 0)) for b in scheduled_broadcasts) or offers_created
+    async with db.transaction() as conn:
+        product = await conn.fetchrow(
+            """
+            SELECT p.id, p.slug, p.regular_price_br, p.recovery_price_br, p.discounts_enabled,
+                   COALESCE(am.title, en.title, p.slug) AS title
+            FROM products p
+            LEFT JOIN product_translations am ON am.product_id = p.id AND am.language = 'am'
+            LEFT JOIN product_translations en ON en.product_id = p.id AND en.language = 'en'
+            WHERE p.slug = $1 FOR UPDATE
+            """,
+            slug,
+        )
+        if product is None:
+            await callback.message.edit_text("❌ Product not found.")
+            return
 
+        prod_id = product["id"]
+        if not product["discounts_enabled"]:
+            await conn.execute("UPDATE products SET discounts_enabled=TRUE, updated_at=now() WHERE id=$1", prod_id)
+
+        admin_id = await repo.admin_id(conn, callback.from_user.id)
+        original_price = Decimal(str(product["regular_price_br"]))
+        offer_price = price
+        expires_at = datetime.now(UTC) + timedelta(seconds=86400)
+
+        # 1. Create discount rule
+        rule_row = await conn.fetchrow(
+            """
+            INSERT INTO discount_rules(
+                product_id, name, rule_type, target_price_br, expires_after_seconds,
+                commissionable, is_active, max_claims_per_user, created_by_admin_id
+            )
+            VALUES($1, $2, 'fixed_price', $3, 86400, FALSE, TRUE, 1, $4)
+            RETURNING *
+            """,
+            prod_id,
+            f"Flash Deal {int(offer_price)} Br ({slug})",
+            offer_price,
+            admin_id,
+        )
+        rule_id = rule_row["id"]
+
+        # 2. Bulk create customer offers
+        offers_created = await repo.bulk_create_campaign_offers(
+            conn,
+            discount_rule_id=rule_id,
+            product_id=prod_id,
+            original_price_br=original_price,
+            offer_price_br=offer_price,
+            expires_at=expires_at,
+        )
+
+        # 3. Create ONE unified broadcast for non-buyers
+        am_copy, en_copy = _get_campaign_copy(price=offer_price, regular_price=original_price)
+        bc_row = await conn.fetchrow(
+            """
+            INSERT INTO broadcasts(
+                name, audience_definition, content_am, content_en,
+                attribution_window_hours, status, started_at, created_by_admin_id
+            )
+            VALUES($1, $2::jsonb, $3::jsonb, $4::jsonb, 48, 'sending', now(), $5)
+            RETURNING *
+            """,
+            f"Flash Discount {int(offer_price)} Br — {slug}",
+            {"kind": "non_buyers", "product_id": str(prod_id)},
+            {"text": am_copy, "buttons": [{"key": "buy", "text": f"🔥 አሁን ይግዙ — {int(offer_price)} ብር", "callback_data": "retarget:action:buy"}]},
+            {"text": en_copy, "buttons": [{"key": "buy", "text": f"🔥 Get It Now — {int(offer_price)} Br", "callback_data": "retarget:action:buy"}]},
+            admin_id,
+        )
+        broadcast_id = bc_row["id"]
+
+        # Snapshot non-buyers
+        audience = Audience(kind="non_buyers", product_id=str(prod_id))
+        total_recipients = await repo.snapshot_broadcast_audience(conn, broadcast_id=broadcast_id, audience=audience)
+
+    price_display = int(price) if price % 1 == 0 else price
     initial_text = (
         f"<b>BROADCAST DISPATCH CONTROL</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📦 <b>Campaign:</b> {int(price) if price % 1 == 0 else price} Br Flash Recovery\n"
+        f"📦 <b>Campaign:</b> {price_display} Br Flash Recovery\n"
         f"👥 <b>Total Target:</b> {total_recipients} recipients\n"
         f"🏷 <b>Offers Created:</b> {offers_created}\n\n"
-        f"<b>Status:</b> <code>🚀 DISPATCHING</code>\n"
+        f"<b>Status:</b> <code>🚀 DISPATCHING (FAST)</code>\n"
         f"<b>Progress:</b> [░░░░░░░░░░] 0%\n\n"
         f"  • ✅ <b>Sent:</b> 0\n"
         f"  • 🚫 <b>Bot Blocked:</b> 0\n"
         f"  • ⏳ <b>Remaining:</b> {total_recipients}\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"<i>⚡️ Initializing durable worker queue...</i>"
+        f"<i>⚡️ Launching fast direct delivery...</i>"
     )
 
     await callback.message.edit_text(initial_text)
 
-    # Spawn async tracking task in background
-    if broadcast_ids:
-        asyncio.create_task(
-            _poll_broadcast_progress(
-                bot=bot,
-                chat_id=callback.message.chat.id,
-                message_id=callback.message.message_id,
-                broadcast_ids=broadcast_ids,
-                db=db,
-                total_recipients=total_recipients,
-                campaign_name=f"{int(price) if price % 1 == 0 else price} Br Flash Recovery",
-            )
+    # Spawn direct fast dispatcher task in background
+    asyncio.create_task(
+        _direct_fast_dispatcher(
+            bot=bot,
+            chat_id=callback.message.chat.id,
+            message_id=callback.message.message_id,
+            broadcast_id=broadcast_id,
+            db=db,
+            price=price,
+            regular_price=original_price,
         )
+    )
 
 
 @router.callback_query(F.data == "admin:disc:cancel")

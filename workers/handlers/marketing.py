@@ -220,7 +220,7 @@ async def broadcast_send_handler(ctx: WorkerContext, job: Job) -> dict[str, obje
         raise PermanentJobError("Invalid broadcast send payload", code="BAD_PAYLOAD") from exc
     async with ctx.db.transaction() as conn:
         row=await conn.fetchrow(
-            """SELECT br.*,b.status AS broadcast_status,b.content_am,b.content_en,u.telegram_id,u.is_bot_blocked,COALESCE(u.preferred_language,'am') AS preferred_language
+            """SELECT br.*,b.status AS broadcast_status,b.content_am,b.content_en,u.telegram_id,u.first_name,u.is_bot_blocked,COALESCE(u.preferred_language,'am') AS preferred_language
                FROM broadcast_recipients br JOIN broadcasts b ON b.id=br.broadcast_id JOIN users u ON u.id=br.user_id
                WHERE br.broadcast_id=$1 AND br.user_id=$2 FOR UPDATE OF br""",
             broadcast_id,user_id,
@@ -250,7 +250,10 @@ async def broadcast_send_handler(ctx: WorkerContext, job: Job) -> dict[str, obje
                 if existing is None: raise RuntimeError("Could not allocate broadcast click token")
             buttons.append({"key":b["key"],"text":b["text"],"url":b.get("url", ""),"callback_data":b.get("callback_data", ""),"token":existing["token"]})
     markup,_=_markup(buttons,ctx.settings.public_api_base_url)
-    text=str(content.get("text") or "").strip(); media=content.get("media") if isinstance(content.get("media"),dict) else None
+    raw_text=str(content.get("text") or "").strip(); media=content.get("media") if isinstance(content.get("media"),dict) else None
+    fname=str(row["first_name"] or "").strip()
+    clean_name=escape(fname) if fname else ("ውድ ደንበኛችን" if lang=="am" else "Friend")
+    text=raw_text.replace("{first_name}", clean_name)
     try:
         if media and media.get("type")=="photo": msg=await ctx.bot.send_photo(chat_id=int(row["telegram_id"]),photo=media["file_id"],caption=text or None,reply_markup=markup)
         elif media and media.get("type")=="video": msg=await ctx.bot.send_video(chat_id=int(row["telegram_id"]),video=media["file_id"],caption=text or None,reply_markup=markup)
