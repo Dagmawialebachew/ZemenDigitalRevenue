@@ -34,11 +34,11 @@ services:
       - key: WORKER_CONCURRENCY
         value: "1"
       - key: WORKER_LISTEN_NOTIFY_ENABLED
-        value: "false"
+        value: "true"
       - key: WORKER_POLL_FALLBACK_SECONDS
-        value: "900"
+        value: "5"
       - key: WORKER_RECOVERY_INTERVAL_SECONDS
-        value: "900"
+        value: "30"
       - key: WORKER_LEASE_SECONDS
         value: "180"
       - key: WORKER_SHUTDOWN_GRACE_SECONDS
