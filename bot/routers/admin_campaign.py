@@ -450,7 +450,7 @@ async def launch_discount_callback(
             FROM products p
             LEFT JOIN product_translations am ON am.product_id = p.id AND am.language = 'am'
             LEFT JOIN product_translations en ON en.product_id = p.id AND en.language = 'en'
-            WHERE p.slug = $1 FOR UPDATE
+            WHERE p.slug = $1 FOR UPDATE OF p
             """,
             slug,
         )
