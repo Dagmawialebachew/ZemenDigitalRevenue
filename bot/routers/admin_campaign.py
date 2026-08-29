@@ -471,10 +471,11 @@ async def launch_discount_callback(
         rule_row = await conn.fetchrow(
             """
             INSERT INTO discount_rules(
-                product_id, name, rule_type, target_price_br, expires_after_seconds,
-                commissionable, is_active, max_claims_per_user, created_by_admin_id
+                product_id, name, rule_type, target_price_br, eligibility_delay_seconds,
+                expires_after_seconds, is_active, created_by_admin_id, require_no_pending_payment,
+                minimum_intent_score, metadata
             )
-            VALUES($1, $2, 'fixed_price', $3, 86400, FALSE, TRUE, 1, $4)
+            VALUES($1, $2, 'campaign', $3, 0, 86400, TRUE, $4, TRUE, 0, '{"commissionable": false, "source": "flash_commander"}'::jsonb)
             RETURNING *
             """,
             prod_id,
