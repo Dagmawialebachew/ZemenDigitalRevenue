@@ -183,6 +183,17 @@ class PaymentService:
                 else Decimal("0")
             )
             expires_at = datetime.now(UTC) + timedelta(minutes=self.settings.order_ttl_minutes)
+            raw_offer_id = product.get("offer_id")
+            validated_offer_id = None
+            if raw_offer_id is not None:
+                # Paranoid check: ensure ID genuinely exists in customer_offers table to prevent any FK violation
+                offer_exists = await conn.fetchval(
+                    "SELECT 1 FROM customer_offers WHERE id = $1",
+                    raw_offer_id,
+                )
+                if offer_exists:
+                    validated_offer_id = raw_offer_id
+
             order = await self.repo.create_order(
                 conn,
                 public_id=new_order_public_id(),
@@ -193,7 +204,7 @@ class PaymentService:
                 final_price_br=price.final_price_br,
                 discount_br=price.discount_br,
                 pricing_type=price.pricing_type.value,
-                customer_offer_id=product["offer_id"],
+                customer_offer_id=validated_offer_id,
                 tracking_link_id=tracking_link_id,
                 referral_attribution_id=referral_attribution_id,
                 commissionable=price.commissionable,

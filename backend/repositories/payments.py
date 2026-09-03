@@ -17,7 +17,7 @@ class PaymentRepository:
             """
             SELECT
                 p.*,
-                COALESCE(offer.id, rule_offer.id) AS offer_id,
+                offer.id AS offer_id,
                 COALESCE(offer.offer_price_br, rule_offer.target_price_br) AS offer_price_br,
                 COALESCE(offer.expires_at, rule_offer.expires_at) AS offer_expires_at,
                 (ent.user_id IS NOT NULL) AS is_owned

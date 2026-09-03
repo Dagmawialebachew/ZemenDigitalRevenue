@@ -66,3 +66,16 @@ def test_automated_drip_payment_recovery_engine_contract() -> None:
     assert 'registry.register("payment.drip.reminder_2h", payment_drip_reminder_handler)' in registry
     assert 'registry.register("payment.drip.reminder_24h", payment_drip_reminder_handler)' in registry
 
+
+def test_customer_offer_foreign_key_safety() -> None:
+    repo = (ROOT / "backend/repositories/payments.py").read_text(encoding="utf-8")
+    service = (ROOT / "backend/services/payments.py").read_text(encoding="utf-8")
+
+    # Offer ID in checkout query must strictly bind to customer_offers (not discount_rules)
+    assert "offer.id AS offer_id," in repo
+    assert "COALESCE(offer.id, rule_offer.id)" not in repo
+
+    # Defensive check in service must ensure offer exists in customer_offers table before setting customer_offer_id
+    assert "validated_offer_id" in service
+    assert "SELECT 1 FROM customer_offers WHERE id = $1" in service
+
