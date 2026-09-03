@@ -139,12 +139,16 @@ def onboarding_keyboard(*, field: str, language: str, role: str | None = None) -
         source = EN_OPTIONS if language == "en" else AM_OPTIONS
         options = source[field]
 
-    for label, value in options:
+    for i in range(0, len(options), 2):
+        chunk = options[i:i+2]
         builder.row(
-            inline_action(
-                text=label,
-                callback_data=f"ob:{field}:{value}",
-                style=ButtonStyle.PRIMARY,
-            )
+            *[
+                inline_action(
+                    text=label,
+                    callback_data=f"ob:{field}:{value}",
+                    style=ButtonStyle.PRIMARY,
+                )
+                for label, value in chunk
+            ]
         )
     return builder.as_markup()

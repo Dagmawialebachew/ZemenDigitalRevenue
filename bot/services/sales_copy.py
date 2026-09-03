@@ -98,39 +98,43 @@ def pitch_text(p: SalesPresentation) -> str:
     if not p.profile.complete:
         if p.language == "en":
             lines = [
-                f"👋 <b>{escape(p.first_name)}, see the product before answering anything.</b>",
+                f"👋 <b>Hello {escape(p.first_name)}, welcome!</b>",
                 "",
-                f"📦 <b>{title}</b>",
+                "Trusted by <b>500+</b> Ethiopian professionals and business owners to automate daily office work and increase efficiency:",
+                "",
+                f"📦 <b>«{title}»</b>",
+                "<i>Complete 131-page practical guide + 27+ ready copy-paste prompts</i>",
+                "",
+                "<blockquote expandable>",
+                "✨ <b>What’s included inside?</b>\n"
+                "• Draft reports, client emails & data summaries with ChatGPT in minutes\n"
+                "• 27+ copy-paste prompts for office, finance & marketing\n"
+                "• Zero tech or coding background needed\n"
+                "• Works instantly on your phone or PC",
+                "</blockquote>",
             ]
-            if desc:
-                lines.append(desc)
-            lines.extend(["", social_proof_text(p)])
-            lines.extend(
-                [
-                    "",
-                    "Open the real preview, inspect the sample, and decide from what you actually receive.",
-                ]
-            )
             if price:
-                lines.extend(["", f"💰 <b>{price} Br</b>"])
+                lines.extend(["", f"💰 Price: <b>{price} Br</b> <i>(One-time payment)</i>"])
             return "\n".join(lines)
 
         lines = [
-            f"👋 <b>{escape(p.first_name)}፣ ምንም ነገር ከመመለስዎ በፊት ምርቱን ይመልከቱ።</b>",
+            f"👋 <b>ሰላም {escape(p.first_name)}፣ እንኳን ደህና መጡ!</b>",
             "",
-            f"📦 <b>{title}</b>",
+            "በኢትዮጵያ ውስጥ ከ<b>500+</b> በላይ ባለሙያዎች፣ የቢሮ ሰራተኞች እና የንግድ ባለቤቶች ስራቸውን ለማቀላጠፍ የመረጡት ይፋዊ ተግባራዊ መመሪያ፦",
+            "",
+            f"📦 <b>«{title}»</b>",
+            "<i>ባለ 131 ገጽ የተሟላ የአማርኛ መመሪያ + 27+ ዝግጁ Copy-Paste Prompts</i>",
+            "",
+            "<blockquote expandable>",
+            "✨ <b>በውስጡ ምን ያገኛሉ?</b>\n"
+            "• በChatGPT እና AI የስራ ሪፖርቶችን፣ ኢሜይሎችንና ዳታን በደቂቃዎች ማዘጋጀት\n"
+            "• 27+ ዝግጁ Copy-Paste Prompts ለቢሮ፣ ለስራና ለቢዝነስ አውቶሜሽን\n"
+            "• ምንም የቴክኖሎጂ ወይም የኮዲንግ እውቀት አይጠይቅም\n"
+            "• በስልክዎ ወይም በኮምፒውተርዎ ወዲያውኑ የሚተገበር",
+            "</blockquote>",
         ]
-        if desc:
-            lines.append(desc)
-        lines.extend(["", social_proof_text(p)])
-        lines.extend(
-            [
-                "",
-                "እውነተኛውን preview ይክፈቱ፣ ነፃውን ሳምፕል ይመልከቱ፣ ከዚያም በሚያገኙት ነገር ላይ ተመስርተው ይወስኑ።",
-            ]
-        )
         if price:
-            lines.extend(["", f"💰 <b>{price} ብር</b>"])
+            lines.extend(["", f"💰 ዋጋ፦ <b>{price} ብር</b> <i>(የአንድ ጊዜ ክፍያ)</i>"])
         return "\n".join(lines)
 
     if p.language == "en":
@@ -225,18 +229,40 @@ def detail_text(detail: SalesDetail, *, kind: str) -> str:
             lines.extend(["", f"💰 መደበኛ ዋጋ፦ <b>{price} ብር</b>"])
         return "\n".join(lines)
 
-    # Never invent a promise to defeat an objection. Push the user toward real proof.
+    # Structured, emojified, bold and italic FAQ with expandable blockquote answers
     if p.language == "en":
         return (
-            "🤔 <b>Fair question.</b>\n\n"
-            f"{social_proof_text(p)}\n\n"
-            f"I'm showing you {title} because it lines up with what you told me — your situation, AI experience, goal and obstacle. "
-            "Don't buy it just because I said so. Open the preview, compare it with what you need, then decide."
+            "🤔 <b>Frequently Asked Questions (FAQ) & Support:</b>\n\n"
+            "📱 <b><i>Question 1: Can I read this on my phone (iPhone / Android) or PC?</i></b>\n"
+            "<blockquote expandable>\n"
+            "✅ <i>Yes! The guide is in standard <b>PDF format</b>, optimized for crystal-clear reading on any smartphone, tablet, or laptop without needing extra software.</i>\n"
+            "</blockquote>\n\n"
+            "💳 <b><i>Question 2: Which payment methods are accepted?</i></b>\n"
+            "<blockquote expandable>\n"
+            "✅ <i>You can easily pay via <b>Telebirr</b> or <b>CBE (Commercial Bank of Ethiopia)</b> in under 1 minute. Account details are copied with 1 tap.</i>\n"
+            "</blockquote>\n\n"
+            "⚡ <b><i>Question 3: How do I receive the guide after paying?</i></b>\n"
+            "<blockquote expandable>\n"
+            "✅ <i>As soon as you upload your payment screenshot, the full 131-page guide and 27+ copy-paste prompts are delivered directly to your Telegram chat in seconds.</i>\n"
+            "</blockquote>\n\n"
+            "👨‍💼 <b><i>Have another specific question?</i></b>\n"
+            "<i>Tap the button below to message our team directly.</i>"
         )
 
     return (
-        "🤔 <b>ጥሩ ጥያቄ ነው።</b>\n\n"
-        f"{social_proof_text(p)}\n\n"
-        f"{title}ን ያሳየንዎት ከነገሩን — አሁን ያሉበት ሁኔታ፣ AI ልምድዎ፣ ግብዎ እና እንቅፋትዎ — ጋር ስለሚገናኝ ነው። "
-        "እኛ ስለነገርንዎ ብቻ አይግዙት። መጀመሪያ ውስጡን ይመልከቱ፤ ከሚፈልጉት ጋር ካልተጣጣመ አይግዙ።"
+        "🤔 <b>ተደጋግመው የሚጠየቁ ጥያቄዎች (FAQ) & ድጋፍ፦</b>\n\n"
+        "📱 <b><i>ጥያቄ 1: መጽሐፉን በስልኬ (iPhone / Android) ወይም በላፕቶፕ ማንበብ እችላለሁ?</i></b>\n"
+        "<blockquote expandable>\n"
+        "✅ <i>አዎ! መጽሐፉ በ<b>PDF ፎርማት</b> የተዘጋጀ ስለሆነ በማንኛውም ስልክ፣ ታብሌት ወይም ኮምፒውተር ላይ ያለምንም ተጨማሪ አፕሊኬሽን በቀላሉ ይከፈታል።</i>\n"
+        "</blockquote>\n\n"
+        "💳 <b><i>ጥያቄ 2: በየትኞቹ የክፍያ አማራጮች መክፈል እችላለሁ?</i></b>\n"
+        "<blockquote expandable>\n"
+        "✅ <i>በ<b>Telebirr</b> ወይም በ<b>CBE (የኢትዮጵያ ንግድ ባንክ)</b> በቀላሉ በ1 ደቂቃ ውስጥ መክፈል ይችላሉ። የባንክ አካውንቱን በ1 ንክኪ ኮፒ ማድረግ ይችላሉ።</i>\n"
+        "</blockquote>\n\n"
+        "⚡ <b><i>ጥያቄ 3: ክፍያ ከፈጸምኩ በኋላ መጽሐፉ እንዴት ይደርሰኛል?</i></b>\n"
+        "<blockquote expandable>\n"
+        "✅ <i>የክፍያ ደረሰኝ (Screenshot) እንደላኩ ወዲያውኑ እዚሁ Telegram ላይ የተሟላው ባለ 131 ገጽ መጽሐፍ እና 27+ Prompts በሰከንዶች ውስጥ ይላክልዎታል።</i>\n"
+        "</blockquote>\n\n"
+        "👨‍💼 <b><i>ሌላ ያልተመለሰ ጥያቄ አለዎት?</i></b>\n"
+        "<i>ከታች ያለውን ቁልፍ በመጫን ከአስተዳዳሪ ጋር በቀጥታ መገናኘት ይችላሉ፦</i>"
     )

@@ -26,8 +26,9 @@ def payment_method_keyboard(
     telebirr_enabled: bool,
 ) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
+    methods = []
     if cbe_enabled:
-        builder.row(
+        methods.append(
             inline_action(
                 text="🏦 CBE",
                 callback_data=f"pay:method:{order_public_id}:cbe",
@@ -35,13 +36,15 @@ def payment_method_keyboard(
             )
         )
     if telebirr_enabled:
-        builder.row(
+        methods.append(
             inline_action(
                 text="📱 Telebirr",
                 callback_data=f"pay:method:{order_public_id}:telebirr",
                 style=ButtonStyle.PRIMARY,
             )
         )
+    if methods:
+        builder.row(*methods)
     builder.row(
         inline_action(
             text="↩️ Back" if language == "en" else "↩️ ወደኋላ",
@@ -68,17 +71,15 @@ def purchase_policy_keyboard(*, order_public_id: str, language: str) -> InlineKe
     )
     builder.row(
         inline_action(
-            text="✅ I understand and agree" if language == "en" else "✅ አንብቤ ተስማምቻለሁ",
+            text="✅ I agree" if language == "en" else "✅ አንብቤ ተስማምቻለሁ",
             callback_data=f"pay:accept:{order_public_id}",
             style=ButtonStyle.SUCCESS,
-        )
-    )
-    builder.row(
+        ),
         inline_action(
-            text="💬 Ask before paying" if language == "en" else "💬 ከመክፈልዎ በፊት ይጠይቁ",
+            text="💬 Ask help" if language == "en" else "💬 ይጠይቁ",
             callback_data="menu:help",
             style=None,
-        )
+        ),
     )
     return builder.as_markup()
 
@@ -87,17 +88,15 @@ def payment_confirmation_keyboard(*, order_public_id: str, method: str, language
     builder = InlineKeyboardBuilder()
     builder.row(
         inline_action(
-            text="✅ Continue to payment" if language == "en" else "✅ ወደ ክፍያ ይቀጥሉ",
+            text="✅ Continue" if language == "en" else "✅ ወደ ክፍያ ይቀጥሉ",
             callback_data=f"pay:confirm:{order_public_id}:{method}",
             style=ButtonStyle.SUCCESS,
-        )
-    )
-    builder.row(
+        ),
         inline_action(
-            text="↩️ Choose another method" if language == "en" else "↩️ ሌላ የክፍያ መንገድ ይምረጡ",
+            text="↩️ Other Method" if language == "en" else "↩️ ሌላ መንገድ",
             callback_data=f"pay:back:{order_public_id}",
             style=None,
-        )
+        ),
     )
     return builder.as_markup()
 
@@ -143,23 +142,13 @@ def payment_followup_keyboard(
 ) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     if state == "owned":
-        if mini_app_url:
-            separator = "&" if "?" in mini_app_url else "?"
-            builder.row(
-                InlineKeyboardButton(
-                    text="📚 Open Library & review" if language == "en" else "📚 Library ክፈቱና አስተያየት ይስጡ",
-                    web_app=WebAppInfo(url=f"{mini_app_url}{separator}section=library"),
-                    style=ButtonStyle.SUCCESS,
-                )
+        builder.row(
+            inline_action(
+                text="📚 Open Library & review" if language == "en" else "📚 Libraryዎን ይክፈቱ",
+                callback_data="menu:library",
+                style=ButtonStyle.SUCCESS,
             )
-        else:
-            builder.row(
-                inline_action(
-                    text="📚 Open My Library" if language == "en" else "📚 Libraryዎን ይክፈቱ",
-                    callback_data="menu:library",
-                    style=ButtonStyle.SUCCESS,
-                )
-            )
+        )
     else:
         label = (
             "📸 Send a new screenshot"

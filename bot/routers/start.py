@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import asyncio
+from contextlib import suppress
 import structlog
 from aiogram import Router
-from aiogram.filters import CommandStart
+from aiogram.enums import ChatAction
+from aiogram.filters import Command, CommandStart
 from aiogram.filters.command import CommandObject
 from aiogram.types import Message
 
@@ -19,6 +22,40 @@ router = Router(name="start")
 log = structlog.get_logger(__name__)
 
 
+@router.message(Command("reset", "clear", "wipe"))
+async def reset_test_user(message: Message, db: Database) -> None:
+    if message.from_user is None:
+        return
+    tg_id = message.from_user.id
+    async with db.transaction() as conn:
+        user = await conn.fetchrow("SELECT id FROM users WHERE telegram_id = $1", tg_id)
+        if user:
+            user_id = user["id"]
+            await conn.execute("DELETE FROM conversation_sessions WHERE user_id = $1", user_id)
+            await conn.execute("DELETE FROM order_deliveries WHERE order_id IN (SELECT id FROM orders WHERE user_id = $1)", user_id)
+            await conn.execute("DELETE FROM entitlements WHERE user_id = $1", user_id)
+            await conn.execute("DELETE FROM payment_proofs WHERE submitted_by_user_id = $1 OR payment_id IN (SELECT id FROM payments WHERE user_id = $1)", user_id)
+            await conn.execute("DELETE FROM manual_payment_reviews WHERE payment_id IN (SELECT id FROM payments WHERE user_id = $1)", user_id)
+            await conn.execute("DELETE FROM payments WHERE user_id = $1", user_id)
+            await conn.execute("DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE user_id = $1)", user_id)
+            await conn.execute("DELETE FROM order_security_verifications WHERE order_id IN (SELECT id FROM orders WHERE user_id = $1)", user_id)
+            await conn.execute("DELETE FROM customer_discount_offers WHERE user_id = $1", user_id)
+            await conn.execute("DELETE FROM broadcast_recipients WHERE user_id = $1", user_id)
+            await conn.execute("DELETE FROM broadcast_click_links WHERE user_id = $1", user_id)
+            await conn.execute("DELETE FROM referral_attributions WHERE referred_user_id = $1 OR referrer_user_id = $1", user_id)
+            await conn.execute("DELETE FROM referral_accounts WHERE owner_user_id = $1", user_id)
+            await conn.execute("DELETE FROM user_sources WHERE user_id = $1", user_id)
+            await conn.execute("DELETE FROM user_profiles WHERE user_id = $1", user_id)
+            await conn.execute("DELETE FROM events WHERE user_id = $1", user_id)
+            await conn.execute("DELETE FROM user_product_journeys WHERE user_id = $1", user_id)
+            await conn.execute("DELETE FROM orders WHERE user_id = $1", user_id)
+            await conn.execute("DELETE FROM users WHERE id = $1", user_id)
+    await message.answer(
+        "🧹 <b>መረጃዎ ሙሉ በሙሉ ተሰርዟል!</b>\n\nእንደ አዲስ ተጠቃሚ ለመሞከር <b>/start</b> ይላኩ።\n\n"
+        "<i>(Your test session has been reset. Send /start to test fresh.)</i>"
+    )
+
+
 @router.message(CommandStart())
 async def start(
     message: Message,
@@ -28,6 +65,10 @@ async def start(
 ) -> None:
     if message.from_user is None:
         return
+
+    with suppress(Exception):
+        await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
+    await asyncio.sleep(0.8)
 
     entry = await CustomerEntryService(db).enter(
         telegram_user=message.from_user,

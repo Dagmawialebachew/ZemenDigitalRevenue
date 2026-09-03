@@ -17,18 +17,18 @@ async def send_rich_or_fallback(
     reply_markup: InlineKeyboardMarkup | None = None,
     enabled: bool = True,
 ) -> Message:
-    """Use Bot API 10.x Rich Messages, with a normal message fallback.
+    """Use Bot API 10.x Rich Messages if available on bot, with a normal message fallback.
 
     Rich Messages are a presentation enhancement, never a business dependency.
     """
-    if enabled:
+    if enabled and hasattr(bot, "send_rich_message"):
         try:
             return await bot.send_rich_message(
                 chat_id=chat_id,
                 rich_message=InputRichMessage(markdown=markdown),
                 reply_markup=reply_markup,
             )
-        except TelegramBadRequest as exc:
+        except Exception as exc:
             log.warning("rich_message_fallback", error=str(exc))
 
     return await bot.send_message(

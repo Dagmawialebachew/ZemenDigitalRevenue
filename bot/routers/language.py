@@ -39,13 +39,22 @@ async def choose_language(
         return
 
     await callback.answer("✅")
+    if callback.message:
+        with suppress(Exception):
+            await callback.message.edit_reply_markup(reply_markup=None)
+
+    chat_id = callback.message.chat.id if callback.message else callback.from_user.id
+    from aiogram.enums import ChatAction
+    import asyncio
+    with suppress(Exception):
+        await callback.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+    await asyncio.sleep(1.2)
+
     if (
         callback.message
         and not current.profile_completed
         and current.requires_onboarding_before_sales
     ):
-        with suppress(Exception):
-            await callback.message.edit_reply_markup(reply_markup=None)
         from bot.routers.onboarding import send_onboarding_step
 
         await send_onboarding_step(
@@ -56,19 +65,7 @@ async def choose_language(
         )
         return
 
-    copy = after_language(current, language=language)
-    chat_id = callback.message.chat.id if callback.message else callback.from_user.id
-    await send_rich_or_fallback(
-        callback.bot,
-        chat_id=chat_id,
-        markdown=copy.rich_markdown,
-        fallback_text=copy.text,
-        reply_markup=None,
-        enabled=settings.telegram_use_rich_messages,
-    )
     if callback.message:
-        with suppress(Exception):
-            await callback.message.edit_reply_markup(reply_markup=None)
         from bot.routers.sales import send_sales_pitch
 
         await send_sales_pitch(

@@ -12,23 +12,20 @@ class EntryCopy:
 
 
 def language_prompt(entry: CustomerEntryContext) -> EntryCopy:
-    product_line_am = (
-        f"\n\n📦 **{entry.focus_product_title}** ለማየት ነው የመጡት — ተረድቻለሁ።"
-        if entry.focus_product_title else ""
+    name = entry.first_name or "ወዳጃችን"
+    text = (
+        f"👋 <b>ሰላም {name}፣ እንኳን ወደ Zemen Digital በደህና መጡ!</b>\n\n"
+        "👇 <b>እባክዎ ለመቀጠል ከታች ካሉት አዝራሮች አንዱን ይጫኑ፦</b>\n"
+        "👇 <b>Please tap a button below to continue:</b>"
+    )
+    rich_md = (
+        f"# 👋 ሰላም {name}፣ እንኳን ወደ Zemen Digital በደህና መጡ!\n\n"
+        "👇 /n**እባክዎ ለመቀጠል ከታች ካሉት ቁልፎች አንዱን ይጫኑ፦**\n"
+        "👇 **Please tap a button below to continue:**"
     )
     return EntryCopy(
-        text=(
-            "👋 እንኳን ወደ Zemen Digital በደህና መጡ!\n\n"
-            "ከመጀመራችን በፊት በየትኛው ቋንቋ እንቀጥል?"
-            + product_line_am.replace("**", "")
-            + "\n\n🇬🇧 English is available too."
-        ),
-        rich_markdown=(
-            "# 👋 Zemen Digital\n\n"
-            "ከመጀመራችን በፊት **በየትኛው ቋንቋ እንቀጥል?**"
-            + product_line_am
-            + "\n\n🇬🇧 English is available too."
-        ),
+        text=text,
+        rich_markdown=rich_md,
     )
 
 

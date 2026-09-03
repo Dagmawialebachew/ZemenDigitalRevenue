@@ -23,44 +23,19 @@ router = Router(name="menu")
 def _mini_app_button(
     *,
     language: str,
-    mini_app_url: str,
-    section: str,
+    mini_app_url: str = "",
+    section: str = "",
 ) -> InlineKeyboardMarkup:
-    rows: list[list[InlineKeyboardButton]] = []
-
-    if mini_app_url:
-        if section == "library":
-            label = (
-                "📚 Open My Library"
-                if language == "en"
-                else "📚 የእኔን Library ክፈት"
-            )
-        else:
-            label = (
-                "🤝 Open Earn"
-                if language == "en"
-                else "🤝 Earn ክፈት"
-            )
-
-        rows.append(
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=label,
-                    web_app=WebAppInfo(url=mini_app_url),
+                    text="🏠 Home" if language == "en" else "🏠 ዋና ገጽ",
+                    callback_data="menu:home",
                 )
             ]
-        )
-
-    rows.append(
-        [
-            InlineKeyboardButton(
-                text="🏠 Home" if language == "en" else "🏠 ዋና ገጽ",
-                callback_data="menu:home",
-            )
         ]
     )
-
-    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 @router.message(Command("home"))
 async def home_command(

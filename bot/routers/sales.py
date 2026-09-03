@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import asyncio
+from contextlib import suppress
+
 from aiogram import F, Router
+from aiogram.enums import ChatAction
 from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -15,7 +19,7 @@ from backend.repositories.sessions import ConversationSessionRepository
 from backend.repositories.users import UserRepository
 from backend.services.salesman import SalesmanService
 from bot.keyboards.home import home_keyboard
-from bot.keyboards.sales import after_detail_keyboard, sales_keyboard
+from bot.keyboards.sales import after_detail_keyboard, sales_keyboard, tier_selection_keyboard
 from bot.services.background import run_background
 from bot.services.callbacks import answer_callback_safely
 from bot.services.current_user import load_current_entry_context
@@ -118,7 +122,11 @@ async def send_sales_pitch(
     settings: Settings,
     user_id: object,
 ) -> None:
-    
+    chat_id = message.chat.id
+    with suppress(Exception):
+        await message.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+    await asyncio.sleep(0.8)
+
     service = SalesmanService(db)
     presentation = await service.presentation(user_id=user_id)
 
@@ -292,6 +300,7 @@ async def sales_detail(
         price_br=price,
         mini_app_url=settings.mini_app_url,
         show_sample=action != "sample",
+        show_support=action == "question",
     )
 
     if action == "preview":
@@ -407,6 +416,61 @@ async def sales_buy(
             return
 
         raise
+
+
+@router.callback_query(F.data.startswith("sales:tier:"))
+async def choose_sales_tier(
+    callback: CallbackQuery,
+    db: Database,
+    settings: Settings,
+) -> None:
+    await answer_callback_safely(callback, "✨")
+
+    current = await load_current_entry_context(
+        db,
+        telegram_user=callback.from_user,
+    )
+
+    if callback.message is None or current is None or callback.data is None:
+        return
+
+    parts = callback.data.split(":", 3)
+    if len(parts) != 4:
+        return
+    _, _, tier, base_slug = parts
+
+    target_slug = base_slug
+    if tier == "pro":
+        target_slug = f"{base_slug}-pro"
+    elif tier == "vip":
+        target_slug = f"{base_slug}-vip"
+
+    products_repo = ProductRepository()
+    async with db.transaction() as conn:
+        target_product = await products_repo.get_active_by_slug(conn, slug=target_slug)
+        if target_product is None:
+            target_slug = base_slug
+
+    from bot.routers.payments import send_checkout
+
+    try:
+        await send_checkout(
+            message=callback.message,
+            db=db,
+            settings=settings,
+            user_id=current.user_id,
+            product_slug=target_slug,
+        )
+    except ValueError as exc:
+        if str(exc) == "product already owned":
+            await send_owned_product_message(
+                message=callback.message,
+                settings=settings,
+                language=current.language_for_copy,
+            )
+            return
+        raise
+
 
 
 async def send_owned_product_message(

@@ -11,12 +11,12 @@ def language_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 inline_action(
-                    text="🇪🇹 አማርኛ",
+                    text="🇪🇹 በአማርኛ እንቀጥል",
                     callback_data="lang:am",
                     style=ButtonStyle.SUCCESS,
                 ),
                 inline_action(
-                    text="🇬🇧 English",
+                    text="🇬🇧 In English",
                     callback_data="lang:en",
                     style=ButtonStyle.PRIMARY,
                 ),

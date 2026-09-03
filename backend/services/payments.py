@@ -465,6 +465,39 @@ class PaymentService:
                 payload={"method": method.value, "payment_public_id": payment["public_id"]},
             )
 
+        job_repo = JobRepository(self.db)
+        now = datetime.now(UTC)
+        await job_repo.enqueue(
+            EnqueueJob(
+                job_type="payment.drip.reminder_15m",
+                queue="telegram",
+                job_key=f"drip:15m:{order['id']}",
+                run_at=now + timedelta(minutes=15),
+                payload={"order_id": str(order["id"]), "payment_id": str(payment["id"])},
+                max_attempts=5,
+            )
+        )
+        await job_repo.enqueue(
+            EnqueueJob(
+                job_type="payment.drip.reminder_2h",
+                queue="telegram",
+                job_key=f"drip:2h:{order['id']}",
+                run_at=now + timedelta(hours=2),
+                payload={"order_id": str(order["id"]), "payment_id": str(payment["id"])},
+                max_attempts=5,
+            )
+        )
+        await job_repo.enqueue(
+            EnqueueJob(
+                job_type="payment.drip.reminder_24h",
+                queue="telegram",
+                job_key=f"drip:24h:{order['id']}",
+                run_at=now + timedelta(hours=24),
+                payload={"order_id": str(order["id"]), "payment_id": str(payment["id"])},
+                max_attempts=5,
+            )
+        )
+
         return await self.resume_order_for_user(user_id=user_id, order_public_id=order_public_id)
 
     async def submit_proof(
@@ -478,15 +511,26 @@ class PaymentService:
     ) -> ProofSubmission:
         async with self.db.transaction() as conn:
             session = await self.sessions.get(conn, user_id=user_id)
-            if session is None or session["active_payment_id"] is None:
-                raise LookupError("no active payment")
-            payment = await conn.fetchrow(
-                "SELECT * FROM payments WHERE id=$1 AND user_id=$2 FOR UPDATE",
-                session["active_payment_id"],
-                user_id,
-            )
+            payment = None
+            if session and session.get("active_payment_id"):
+                payment = await conn.fetchrow(
+                    "SELECT * FROM payments WHERE id=$1 AND user_id=$2 FOR UPDATE",
+                    session["active_payment_id"],
+                    user_id,
+                )
             if payment is None:
-                raise LookupError("active payment not found")
+                # Fallback: Find the latest active payment awaiting proof for this user
+                payment = await conn.fetchrow(
+                    """
+                    SELECT * FROM payments 
+                    WHERE user_id=$1 AND status IN ('awaiting_proof', 'draft') 
+                    ORDER BY created_at DESC LIMIT 1 
+                    FOR UPDATE
+                    """,
+                    user_id,
+                )
+            if payment is None:
+                raise LookupError("no active payment")
             if payment["status"] in {"approved", "cancelled"}:
                 raise ValueError(f"payment is {payment['status']}")
             if payment["status"] in {"pending_review", "flagged"}:

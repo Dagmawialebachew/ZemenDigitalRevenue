@@ -3,6 +3,7 @@ from __future__ import annotations
 from html import escape
 from uuid import UUID
 
+from aiogram.enums import ButtonStyle
 from aiogram.exceptions import (
     TelegramBadRequest,
     TelegramForbiddenError,
@@ -12,11 +13,13 @@ from aiogram.exceptions import (
     TelegramServerError,
     TelegramUnauthorizedError,
 )
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from backend.repositories.events import EventRepository
 from backend.repositories.operations import OperationsRepository
 from backend.repositories.payments import PaymentRepository
 from bot.keyboards.payments import payment_followup_keyboard, payment_review_keyboard
+from bot.keyboards.primitives import inline_action
 from workers.context import WorkerContext
 from workers.errors import PermanentJobError, RetryableJobError
 from workers.models import Job
@@ -302,3 +305,134 @@ async def product_delivery_handler(ctx: WorkerContext, job: Job) -> dict[str, ob
             payload={"entitlement_id": entitlement_raw, "telegram_message_id": message.message_id},
         )
     return {"entitlement_id": entitlement_raw, "message_id": message.message_id}
+
+
+async def payment_drip_reminder_handler(ctx: WorkerContext, job: Job) -> dict[str, object]:
+    if ctx.bot is None:
+        raise PermanentJobError("Telegram bot unavailable", code="BOT_UNAVAILABLE")
+    order_id_raw = str(job.payload.get("order_id", ""))
+    payment_id_raw = str(job.payload.get("payment_id", ""))
+    try:
+        order_id = UUID(order_id_raw)
+        payment_id = UUID(payment_id_raw)
+    except ValueError as exc:
+        raise PermanentJobError("Invalid order_id or payment_id in drip job", code="BAD_PAYLOAD") from exc
+
+    async with ctx.db.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT o.id AS order_id, o.public_id AS order_public_id, o.status AS order_status,
+                   p.id AS payment_id, p.public_id AS payment_public_id, p.status AS payment_status,
+                   p.payment_method, p.expected_amount_br,
+                   u.id AS user_id, u.telegram_id, u.first_name, u.is_bot_blocked,
+                   COALESCE(u.preferred_language, 'am') AS language,
+                   COALESCE(pt.title, fallback.title, prod.slug) AS product_title
+            FROM orders o
+            JOIN payments p ON p.id = $2 AND p.order_id = o.id
+            JOIN users u ON u.id = o.user_id
+            JOIN order_items oi ON oi.order_id = o.id
+            JOIN products prod ON prod.id = oi.product_id
+            LEFT JOIN product_translations pt ON pt.product_id = prod.id AND pt.language = COALESCE(u.preferred_language, 'am')
+            LEFT JOIN product_translations fallback ON fallback.product_id = prod.id AND fallback.language = prod.default_language
+            WHERE o.id = $1
+            """,
+            order_id,
+            payment_id,
+        )
+
+    if row is None:
+        return {"skipped": True, "reason": "order_or_payment_not_found"}
+
+    if row["is_bot_blocked"]:
+        return {"skipped": True, "reason": "user_bot_blocked"}
+
+    # Only send reminder if payment is still awaiting receipt/proof and order has not completed/cancelled
+    if row["payment_status"] not in {"awaiting_proof", "rejected"} or row["order_status"] not in {"awaiting_payment", "created"}:
+        return {
+            "skipped": True,
+            "reason": "payment_already_progressed",
+            "payment_status": row["payment_status"],
+            "order_status": row["order_status"],
+        }
+
+    language = "en" if row["language"] == "en" else "am"
+    first_name = escape(row["first_name"] or ("Friend" if language == "en" else "ውድ ደንበኛችን"))
+    product_title = escape(row["product_title"] or ("AI From Zero" if language == "en" else "AI ከዜሮ"))
+    payment_public_id = row["payment_public_id"]
+    order_public_id = row["order_public_id"]
+
+    if "15m" in job.job_type:
+        if language == "en":
+            text = (
+                f"<b>Hello {first_name} 👋</b>\n\n"
+                f"⚠️ <b>If you have completed your payment for «{product_title}»:</b>\n\n"
+                "Please tap the <b>«📸 Upload Receipt»</b> button below to submit your transfer screenshot.\n\n"
+                "As soon as you upload it, your complete guide will be delivered immediately! 👇"
+            )
+        else:
+            text = (
+                f"<b>{first_name}፣ ሰላም 👋</b>\n\n"
+                f"⚠️ <b>ለ«{product_title}» ክፍያ ፈጽመው ደረሰኝ (Screenshot) ያልላኩ ከሆነ፦</b>\n\n"
+                "የከፈሉበትን የTelebirr ወይም CBE ደረሰኝ/Screenshot ከታች ያለውን <b>«📸 ደረሰኝ አስገቡ»</b> የሚለውን ቁልፍ በመጫን ወዲያውኑ ያስገቡ።\n\n"
+                "ደረሰኙ እንደደረሰን መጽሐፉ ወዲያውኑ በቴሌግራም ይላክልዎታል! 👇"
+            )
+    elif "2h" in job.job_type:
+        if language == "en":
+            text = (
+                f"<b>{first_name}, your order is reserved ⏳</b>\n\n"
+                f"Your checkout for <b>«{product_title}»</b> is waiting.\n\n"
+                "Once your payment screenshot is uploaded, your 131-page guide and 27+ ready prompts will be unlocked instantly. 👇"
+            )
+        else:
+            text = (
+                f"<b>{first_name}፣ ትዕዛዝዎ ተይዞልዎታል ⏳</b>\n\n"
+                f"ለ<b>«{product_title}»</b> የጀመሩት ትዕዛዝ ክፍት ነው።\n\n"
+                "ክፍያዎን ፈጽመው ደረሰኝዎን ካስገቡ በኋላ ባለ 131 ገጽ መመሪያውና 27+ ዝግጁ Prompts ወዲያውኑ ይላክልዎታል። 👇"
+            )
+    else:  # 24h
+        if language == "en":
+            text = (
+                f"<b>{first_name}, final checkout reminder 🔔</b>\n\n"
+                f"Your order for <b>«{product_title}»</b> is pending. Tap below to upload your receipt or complete checkout. 👇"
+            )
+        else:
+            text = (
+                f"<b>{first_name}፣ የመጨረሻ ማስታወሻ 🔔</b>\n\n"
+                f"የ<b>«{product_title}»</b> ትዕዛዝዎ በመጠባበቅ ላይ ነው። ከታች ያለውን ቁልፍ በመጫን ደረሰኝዎን ያስገቡ ወይም ክፍያዎን ያጠናቅቁ። 👇"
+            )
+
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        inline_action(
+            text="📸 Upload Receipt" if language == "en" else "📸 ደረሰኝ አስገቡ",
+            callback_data=f"pay:paid:{payment_public_id}",
+            style=ButtonStyle.SUCCESS,
+        )
+    )
+    builder.row(
+        inline_action(
+            text="🔄 Check Status" if language == "en" else "🔄 የክፍያ ሁኔታ",
+            callback_data=f"pay:status:{order_public_id}",
+            style=ButtonStyle.PRIMARY,
+        )
+    )
+
+    try:
+        msg = await ctx.bot.send_message(
+            chat_id=int(row["telegram_id"]),
+            text=text,
+            reply_markup=builder.as_markup(),
+        )
+        return {"sent": True, "message_id": msg.message_id, "job_type": job.job_type}
+    except TelegramForbiddenError:
+        async with ctx.db.transaction() as conn:
+            await conn.execute(
+                "UPDATE users SET is_bot_blocked=TRUE, updated_at=now() WHERE id=$1",
+                row["user_id"],
+            )
+        return {"blocked": True}
+    except Exception as exc:
+        mapped = _telegram_error(exc)
+        if mapped is not exc:
+            raise mapped from exc
+        raise

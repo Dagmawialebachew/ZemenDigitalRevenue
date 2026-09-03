@@ -46,3 +46,23 @@ def test_discounted_orders_cannot_create_commission_in_service_or_db() -> None:
     invariant = (ROOT / "database/migrations/0002_invariants_indexes.sql").read_text(encoding="utf-8")
     assert 'order["pricing_type"] == "regular"' in service
     assert "Discounted orders cannot generate referral commission" in invariant
+
+
+def test_automated_drip_payment_recovery_engine_contract() -> None:
+    service = (ROOT / "backend/services/payments.py").read_text(encoding="utf-8")
+    handlers = (ROOT / "workers/handlers/payments.py").read_text(encoding="utf-8")
+    registry = (ROOT / "workers/handlers/__init__.py").read_text(encoding="utf-8")
+
+    assert 'payment.drip.reminder_15m' in service
+    assert 'payment.drip.reminder_2h' in service
+    assert 'payment.drip.reminder_24h' in service
+
+    assert 'payment_drip_reminder_handler' in handlers
+    assert 'pay:paid:{payment_public_id}' in handlers
+    assert 'pay:status:{order_public_id}' in handlers
+    assert 'payment_already_progressed' in handlers
+
+    assert 'registry.register("payment.drip.reminder_15m", payment_drip_reminder_handler)' in registry
+    assert 'registry.register("payment.drip.reminder_2h", payment_drip_reminder_handler)' in registry
+    assert 'registry.register("payment.drip.reminder_24h", payment_drip_reminder_handler)' in registry
+

@@ -7,51 +7,27 @@ from bot.keyboards.primitives import inline_action
 
 
 def continue_keyboard(*, mini_app_url: str = "") -> InlineKeyboardMarkup:
-    rows: list[list[InlineKeyboardButton]] = [
-        [
-            inline_action(
-                text="✨ እንጀምር / Let's start",
-                callback_data="sales:continue",
-                style=ButtonStyle.SUCCESS,
-            )
-        ]
-    ]
-    if mini_app_url:
-        rows.append(
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
             [
-                InlineKeyboardButton(
-                    text="🛍 Zemen Store",
-                    web_app=WebAppInfo(url=mini_app_url),
-                    style=ButtonStyle.PRIMARY,
-                )
+                inline_action(
+                    text="✨ እንጀምር / Start",
+                    callback_data="sales:continue",
+                    style=ButtonStyle.SUCCESS,
+                ),
+                inline_action(
+                    text="🌐 Language / ቋንቋ",
+                    callback_data="menu:language",
+                    style=None,
+                ),
             ]
-        )
-    rows.append(
-        [
-            inline_action(
-                text="🌐 Change language",
-                callback_data="menu:language",
-                style=None,
-            )
         ]
     )
-    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def home_keyboard(*, mini_app_url: str = "") -> InlineKeyboardMarkup:
-    rows: list[list[InlineKeyboardButton]] = []
-    if mini_app_url:
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text="🛍 Open Zemen Store",
-                    web_app=WebAppInfo(url=mini_app_url),
-                    style=ButtonStyle.SUCCESS,
-                )
-            ]
-        )
-    rows.extend(
-        [
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
             [
                 inline_action(
                     text="📚 My Library",
@@ -78,4 +54,3 @@ def home_keyboard(*, mini_app_url: str = "") -> InlineKeyboardMarkup:
             ],
         ]
     )
-    return InlineKeyboardMarkup(inline_keyboard=rows)
