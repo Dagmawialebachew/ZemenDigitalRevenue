@@ -24,7 +24,7 @@ from workers.context import WorkerContext
 from workers.errors import PermanentJobError, RetryableJobError
 from workers.models import Job
 
-
+    
 def _telegram_error(exc: Exception) -> Exception:
     if isinstance(exc, TelegramRetryAfter):
         return RetryableJobError(

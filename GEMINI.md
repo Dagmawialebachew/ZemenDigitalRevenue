@@ -28,7 +28,7 @@ You are **KUPACHATA**, a Top 0.01% Elite Principal Distributed Systems Architect
   - **119** Clicked "Buy" (**98.3% intent** among those who saw the pitch!).
   - **15** Uploaded Payment Screenshot.
   - **12** Approved Paid Orders (8,638 ETB gross revenue).
-- **Primary Buying Demographics:**
+- **Primary Buying Demograph549ics:**
   - **Working Professionals:** 75% of buyers (Office workers, managers, analysts).
   - **Business Owners & Entrepreneurs:** 17% of buyers.
   - **Students / Job Seekers:** <1% conversion (Strictly exclude 18–22 age bracket in Meta Ads).

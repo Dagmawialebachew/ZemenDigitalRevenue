@@ -15,13 +15,13 @@ def language_prompt(entry: CustomerEntryContext) -> EntryCopy:
     name = entry.first_name or "ወዳጃችን"
     text = (
         f"👋 <b>ሰላም {name}፣ እንኳን ወደ Zemen Digital በደህና መጡ!</b>\n\n"
-        "👇 <b>እባክዎ ለመቀጠል ከታች ካሉት አዝራሮች አንዱን ይጫኑ፦</b>\n"
-        "👇 <b>Please tap a button below to continue:</b>"
+        "\n👇 <b>እባክዎ ለመቀጠል ከታች ካሉት ቁልፎች አንዱን ይጫኑ፦</b>\n"
+        "\n👇 <b>Please tap a button below to continue:</b>"
     )
     rich_md = (
         f"# 👋 ሰላም {name}፣ እንኳን ወደ Zemen Digital በደህና መጡ!\n\n"
-        "👇 /n**እባክዎ ለመቀጠል ከታች ካሉት ቁልፎች አንዱን ይጫኑ፦**\n"
-        "👇 **Please tap a button below to continue:**"
+        "\n👇 **እባክዎ ለመቀጠል ከታች ካሉት ቁልፎች አንዱን ይጫኑ፦**\n"
+        "\n👇 **Please tap a button below to continue:**"
     )
     return EntryCopy(
         text=text,
