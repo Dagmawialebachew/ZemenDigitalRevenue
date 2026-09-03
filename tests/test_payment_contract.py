@@ -73,6 +73,7 @@ def test_customer_offer_foreign_key_safety() -> None:
 
     # Offer ID in checkout query must strictly bind to customer_offers (not discount_rules)
     assert "offer.id AS offer_id," in repo
+    assert "rule_offer" not in repo
     assert "COALESCE(offer.id, rule_offer.id)" not in repo
 
     # Defensive check in service must ensure offer exists in customer_offers table before setting customer_offer_id
