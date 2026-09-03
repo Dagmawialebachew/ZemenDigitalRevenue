@@ -31,24 +31,29 @@ async def reset_test_user(message: Message, db: Database) -> None:
         user = await conn.fetchrow("SELECT id FROM users WHERE telegram_id = $1", tg_id)
         if user:
             user_id = user["id"]
-            await conn.execute("DELETE FROM conversation_sessions WHERE user_id = $1", user_id)
-            await conn.execute("DELETE FROM order_deliveries WHERE order_id IN (SELECT id FROM orders WHERE user_id = $1)", user_id)
-            await conn.execute("DELETE FROM entitlements WHERE user_id = $1", user_id)
-            await conn.execute("DELETE FROM payment_proofs WHERE submitted_by_user_id = $1 OR payment_id IN (SELECT id FROM payments WHERE user_id = $1)", user_id)
-            await conn.execute("DELETE FROM manual_payment_reviews WHERE payment_id IN (SELECT id FROM payments WHERE user_id = $1)", user_id)
+            await conn.execute(
+                "UPDATE conversation_sessions SET active_order_id = NULL, active_payment_id = NULL WHERE user_id = $1",
+                user_id,
+            )
+            await conn.execute(
+                "DELETE FROM payment_review_messages WHERE payment_id IN (SELECT id FROM payments WHERE user_id = $1)",
+                user_id,
+            )
+            await conn.execute(
+                "DELETE FROM payment_proofs WHERE submitted_by_user_id = $1 OR payment_id IN (SELECT id FROM payments WHERE user_id = $1)",
+                user_id,
+            )
+            await conn.execute(
+                "DELETE FROM commissions WHERE order_id IN (SELECT id FROM orders WHERE user_id = $1) OR buyer_user_id = $1 OR referrer_user_id = $1",
+                user_id,
+            )
+            await conn.execute(
+                "DELETE FROM entitlements WHERE user_id = $1 OR granted_by_order_id IN (SELECT id FROM orders WHERE user_id = $1)",
+                user_id,
+            )
             await conn.execute("DELETE FROM payments WHERE user_id = $1", user_id)
-            await conn.execute("DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE user_id = $1)", user_id)
-            await conn.execute("DELETE FROM order_security_verifications WHERE order_id IN (SELECT id FROM orders WHERE user_id = $1)", user_id)
-            await conn.execute("DELETE FROM customer_discount_offers WHERE user_id = $1", user_id)
-            await conn.execute("DELETE FROM broadcast_recipients WHERE user_id = $1", user_id)
-            await conn.execute("DELETE FROM broadcast_click_links WHERE user_id = $1", user_id)
-            await conn.execute("DELETE FROM referral_attributions WHERE referred_user_id = $1 OR referrer_user_id = $1", user_id)
-            await conn.execute("DELETE FROM referral_accounts WHERE owner_user_id = $1", user_id)
-            await conn.execute("DELETE FROM user_sources WHERE user_id = $1", user_id)
-            await conn.execute("DELETE FROM user_profiles WHERE user_id = $1", user_id)
-            await conn.execute("DELETE FROM events WHERE user_id = $1", user_id)
-            await conn.execute("DELETE FROM user_product_journeys WHERE user_id = $1", user_id)
             await conn.execute("DELETE FROM orders WHERE user_id = $1", user_id)
+            await conn.execute("DELETE FROM referral_attributions WHERE referrer_user_id = $1", user_id)
             await conn.execute("DELETE FROM users WHERE id = $1", user_id)
     await message.answer(
         "🧹 <b>መረጃዎ ሙሉ በሙሉ ተሰርዟል!</b>\n\nእንደ አዲስ ተጠቃሚ ለመሞከር <b>/start</b> ይላኩ።\n\n"
